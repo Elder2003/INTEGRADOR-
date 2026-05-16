@@ -1,15 +1,10 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
-import Login from './pages/Login'
-import Chat from './pages/Chat'
+import { StudentProvider } from './context/StudentContext'
+import StudentRouter from './router/StudentRouter'
 
-function App() {
+export default function App() {
   return (
-    <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/chat" element={<Chat />} />
-    </Routes>
+    <StudentProvider>
+      <StudentRouter />
+    </StudentProvider>
   )
 }
-
-export default App

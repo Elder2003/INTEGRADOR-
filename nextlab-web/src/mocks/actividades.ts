@@ -1,0 +1,81 @@
+import type { Actividad, CalificacionReciente } from '../types'
+
+export const actividades: Actividad[] = [
+  {
+    id: 'act-001',
+    tipo: 'examen',
+    titulo: 'Examen parcial — Algoritmos y Estructuras de Datos',
+    materia: 'Estructura de Datos',
+    docente: 'Ing. Fernando Hinojosa',
+    fechaLimite: '2026-05-16T17:00:00',
+    estado: 'activa',
+    auditoria: true,
+  },
+  {
+    id: 'act-002',
+    tipo: 'tarea',
+    titulo: 'Implementación de árbol AVL',
+    materia: 'Estructura de Datos',
+    docente: 'Ing. Fernando Hinojosa',
+    fechaLimite: '2026-05-18T23:59:00',
+    estado: 'activa',
+    auditoria: false,
+  },
+  {
+    id: 'act-003',
+    tipo: 'informe',
+    titulo: 'Informe de análisis de complejidad',
+    materia: 'Análisis de Algoritmos',
+    docente: 'Lic. María Torres',
+    fechaLimite: '2026-05-20T23:59:00',
+    estado: 'proxima',
+    auditoria: false,
+  },
+  {
+    id: 'act-004',
+    tipo: 'practica',
+    titulo: 'Práctica — Listas enlazadas',
+    materia: 'Estructura de Datos',
+    docente: 'Ing. Fernando Hinojosa',
+    fechaLimite: null,
+    estado: 'activa',
+    auditoria: false,
+  },
+  {
+    id: 'act-005',
+    tipo: 'proyecto',
+    titulo: 'Proyecto final — Sistema contable',
+    materia: 'Ingeniería de Software',
+    docente: 'Ing. Carlos Mendoza',
+    fechaLimite: '2026-06-30T23:59:00',
+    estado: 'activa',
+    auditoria: true,
+    etapas: [
+      { id: 'eta-001', nombre: 'Diagrama de BD', estado: 'entregada', fechaLimite: '2026-05-10T23:59:00' },
+      { id: 'eta-002', nombre: 'Módulo de autenticación', estado: 'activa', fechaLimite: '2026-05-20T23:59:00' },
+      { id: 'eta-003', nombre: 'Módulo contable', estado: 'pendiente', fechaLimite: '2026-06-05T23:59:00' },
+      { id: 'eta-004', nombre: 'Sistema completo + informe', estado: 'pendiente', fechaLimite: '2026-06-30T23:59:00' },
+    ],
+  },
+]
+
+export const calificacionesRecientes: CalificacionReciente[] = [
+  {
+    id: 'cal-001',
+    actividad: 'Tarea — Recursividad',
+    materia: 'Estructura de Datos',
+    nota: 85,
+    notaMaxima: 100,
+    fecha: '2026-05-08',
+    tieneAlerta: false,
+  },
+  {
+    id: 'cal-002',
+    actividad: 'Examen — Complejidad algorítmica',
+    materia: 'Análisis de Algoritmos',
+    nota: 72,
+    notaMaxima: 100,
+    fecha: '2026-05-05',
+    tieneAlerta: true,
+  },
+]

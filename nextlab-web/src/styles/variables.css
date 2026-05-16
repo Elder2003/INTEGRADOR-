@@ -1,0 +1,29 @@
+:root {
+  --color-bg:           #111111;
+  --color-surface:      #1a1a1a;
+  --color-surface-2:    #222222;
+  --color-border:       #2a2a2a;
+  --color-accent:       #E85D24;
+  --color-accent-hover: #d14f1a;
+  --color-accent-dim:   #2a1500;
+
+  --color-text-primary:   #ffffff;
+  --color-text-secondary: #888888;
+  --color-text-muted:     #555555;
+
+  --color-success: #3fa66e;
+  --color-warning: #f0a500;
+  --color-danger:  #e05252;
+  --color-info:    #4a9eda;
+
+  --color-stripe: #E85D24;
+
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-size-xs:   11px;
+  --font-size-sm:   12px;
+  --font-size-base: 14px;
+  --font-size-md:   16px;
+  --font-size-lg:   20px;
+  --font-size-xl:   24px;
+}
