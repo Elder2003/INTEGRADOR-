@@ -1,0 +1,50 @@
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.so.*
+*.dylib
+*.test
+*.out
+*.prof
+vendor/
+go.sum
+
+# Build artifacts
+/bin/
+/build/
+/dist/
+*.o
+*.a
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Logs
+*.log
+*.log.*
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+Dockerfile.dev
+
+# Misc
+.cache/
+*.pid
