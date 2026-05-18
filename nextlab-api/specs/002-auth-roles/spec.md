@@ -8,6 +8,15 @@
 
 **Input**: User description: "I want you to specify the milestone 2"
 
+## Clarifications
+
+### Session 2026-05-17
+
+- Q: When an admin deactivates a user account, what happens to that user's currently valid access tokens? → A: Accept the 15-minute natural expiry window. The refresh token is invalidated immediately (no new access tokens issued); existing access tokens expire on their own within 15 min.
+- Q: How deep should refresh token theft detection go? → A: Single-use rotation with reuse alert (Option A). If a replaced token is reused, the system invalidates the current live token for that session too, forcing re-authentication. No parent/family tracking needed.
+- Q: How many failed login attempts trigger the rate limit, and for how long? → A: 5 failed attempts within 60 seconds per IP + email combination → 60-second cooldown. No permanent lockout.
+- Q: Should security events be logged to a dedicated store, or is the standard request log sufficient? → A: Structured JSON log only (no DB table). Failed logins, rate limit hits, token reuse, and logouts are emitted as log entries with user ID and IP. A queryable auth_events table is deferred to M11/M12.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Credential-Based Login (Priority: P1)
@@ -81,9 +90,9 @@ A user who has forgotten their password can request a recovery link sent to thei
 ### Edge Cases
 
 - What happens when the same user logs in from two devices simultaneously? Both sessions should remain valid independently.
-- What happens when an admin deactivates a user account? Active tokens for that user must stop working before their natural expiry.
-- What happens when a refresh token is stolen and used by an attacker before the legitimate user? Token rotation detects the reuse and can invalidate the entire session family.
-- How does the system handle a login attempt after too many consecutive failures? The system imposes a short cooldown to slow brute-force attempts (rate limiting, not account lockout).
+- What happens when an admin deactivates a user account? The user's refresh token is invalidated immediately, preventing any new access tokens from being issued. Existing access tokens remain valid until their natural 15-minute expiry; this window is accepted as a known and acceptable gap.
+- What happens when a refresh token is stolen and used by an attacker before the legitimate user? Single-use rotation with reuse detection: when a token that has already been replaced is submitted again, the system immediately invalidates the current live token for that session as well. Both the attacker and the legitimate user lose access to that session and must re-authenticate with their password. Other concurrent sessions for the same user are not affected.
+- How does the system handle a login attempt after too many consecutive failures? 5 failed attempts within 60 seconds (tracked per IP + email combination) trigger a 60-second cooldown. Requests during the cooldown are rejected without revealing whether the account exists. This is rate limiting only — there is no permanent account lockout.
 - What happens if a user tries to reset their password while already logged in? The reset flow should work regardless of current session state.
 
 ## Requirements *(mandatory)*
@@ -102,6 +111,9 @@ A user who has forgotten their password can request a recovery link sent to thei
 - **FR-010**: System MUST allow tracking and revocation of refresh tokens per user and per session, so that a single compromised session can be invalidated without affecting other active sessions for the same user.
 - **FR-011**: System MUST return identical error responses for invalid email and invalid password during login to prevent account enumeration.
 - **FR-012**: System MUST return identical responses for existing and non-existing emails during password reset requests.
+- **FR-013**: System MUST detect refresh token reuse: if a token that has already been rotated is submitted again, the system MUST immediately invalidate the currently live token for that session in addition to rejecting the request, forcing the user to re-authenticate with their password.
+- **FR-014**: System MUST rate-limit the login endpoint: 5 failed attempts within 60 seconds per IP + email combination triggers a 60-second cooldown during which all further attempts are rejected. No permanent account lockout is applied.
+- **FR-015**: System MUST emit structured log entries for the following security events: failed login attempt (with user ID if resolvable, and client IP), rate limit activation, refresh token reuse detection, and explicit logout. No separate database table is required for M2.
 
 ### Key Entities
 
