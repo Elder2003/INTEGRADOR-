@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
 	"github.com/redis/go-redis/v9"
 )
@@ -18,17 +18,17 @@ type DependencyStatus struct {
 }
 
 type HealthReport struct {
-	Status       string                    `json:"status"`
+	Status       string                      `json:"status"`
 	Dependencies map[string]DependencyStatus `json:"dependencies"`
 }
 
 type Checker struct {
-	db    *pgx.Conn
+	db    *pgxpool.Pool
 	redis *redis.Client
 	minio *minio.Client
 }
 
-func NewChecker(db *pgx.Conn, redis *redis.Client, minio *minio.Client) *Checker {
+func NewChecker(db *pgxpool.Pool, redis *redis.Client, minio *minio.Client) *Checker {
 	return &Checker{
 		db:    db,
 		redis: redis,
@@ -37,7 +37,6 @@ func NewChecker(db *pgx.Conn, redis *redis.Client, minio *minio.Client) *Checker
 }
 
 func (c *Checker) Check(ctx context.Context) *HealthReport {
-	// Create a shared deadline context of 400ms
 	ctxWithTimeout, cancel := context.WithTimeout(ctx, 400*time.Millisecond)
 	defer cancel()
 
@@ -45,7 +44,6 @@ func (c *Checker) Check(ctx context.Context) *HealthReport {
 		Dependencies: make(map[string]DependencyStatus),
 	}
 
-	// Run all pings in parallel
 	var wg sync.WaitGroup
 	wg.Add(3)
 
@@ -56,15 +54,9 @@ func (c *Checker) Check(ctx context.Context) *HealthReport {
 		latency := time.Since(start).Milliseconds()
 
 		if err != nil {
-			report.Dependencies["database"] = DependencyStatus{
-				Status: "down",
-				Error:  err.Error(),
-			}
+			report.Dependencies["database"] = DependencyStatus{Status: "down", Error: err.Error()}
 		} else {
-			report.Dependencies["database"] = DependencyStatus{
-				Status:    "ok",
-				LatencyMs: int(latency),
-			}
+			report.Dependencies["database"] = DependencyStatus{Status: "ok", LatencyMs: int(latency)}
 		}
 	}()
 
@@ -75,15 +67,9 @@ func (c *Checker) Check(ctx context.Context) *HealthReport {
 		latency := time.Since(start).Milliseconds()
 
 		if err != nil {
-			report.Dependencies["cache"] = DependencyStatus{
-				Status: "down",
-				Error:  err.Error(),
-			}
+			report.Dependencies["cache"] = DependencyStatus{Status: "down", Error: err.Error()}
 		} else {
-			report.Dependencies["cache"] = DependencyStatus{
-				Status:    "ok",
-				LatencyMs: int(latency),
-			}
+			report.Dependencies["cache"] = DependencyStatus{Status: "ok", LatencyMs: int(latency)}
 		}
 	}()
 
@@ -93,24 +79,15 @@ func (c *Checker) Check(ctx context.Context) *HealthReport {
 		_, err := c.minio.BucketExists(ctxWithTimeout, "test")
 		latency := time.Since(start).Milliseconds()
 
-		// BucketExists returns no error if successful or if bucket doesn't exist
-		// We're just checking connectivity
 		if err != nil {
-			report.Dependencies["storage"] = DependencyStatus{
-				Status: "down",
-				Error:  err.Error(),
-			}
+			report.Dependencies["storage"] = DependencyStatus{Status: "down", Error: err.Error()}
 		} else {
-			report.Dependencies["storage"] = DependencyStatus{
-				Status:    "ok",
-				LatencyMs: int(latency),
-			}
+			report.Dependencies["storage"] = DependencyStatus{Status: "ok", LatencyMs: int(latency)}
 		}
 	}()
 
 	wg.Wait()
 
-	// Determine aggregate status
 	report.Status = "ok"
 	for _, dep := range report.Dependencies {
 		if dep.Status != "ok" {
