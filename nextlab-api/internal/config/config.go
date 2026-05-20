@@ -13,6 +13,8 @@ type Config struct {
 	MinioEndpoint     string
 	MinioAccessKey    string
 	MinioSecretKey    string
+	MinioBucket       string
+	MinioUseSSL       bool
 	APIPort           string
 	LogLevel          string
 	AppEnv            string
@@ -40,6 +42,8 @@ func Load() (*Config, error) {
 		MinioEndpoint:      getenv("MINIO_ENDPOINT", ""),
 		MinioAccessKey:     getenv("MINIO_ACCESS_KEY", ""),
 		MinioSecretKey:     getenv("MINIO_SECRET_KEY", ""),
+		MinioBucket:        getenv("MINIO_BUCKET", "nextlab"),
+		MinioUseSSL:        getenv("MINIO_USE_SSL", "false") == "true",
 		APIPort:            getenv("API_PORT", "8080"),
 		LogLevel:           getenv("LOG_LEVEL", "info"),
 		AppEnv:             getenv("APP_ENV", "development"),

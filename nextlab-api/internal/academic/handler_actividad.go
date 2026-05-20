@@ -172,6 +172,28 @@ func UpdateActividadHandler(db *pgxpool.Pool) fiber.Handler {
 			return internalError(c)
 		}
 
+		// Handle late_submission_allowed toggle atomically with audit log
+		if req.LateSubmissionAllowed != nil && *req.LateSubmissionAllowed != existing.LateSubmissionAllowed {
+			updated, err := UpdateLateSubmissionFlag(c.Context(), db, actividadID, docenteID, *req.LateSubmissionAllowed)
+			if err != nil {
+				return internalError(c)
+			}
+			if updated == nil {
+				return c.Status(fiber.StatusNotFound).JSON(ErrorResponse{
+					Error: "not_found", Message: "actividad not found", CorrelationID: correlationID(c),
+				})
+			}
+			// If only the flag changed, apply any other pending field updates on top
+			if req.Deadline == nil && req.Instructions == nil && req.Title == nil && req.Tipo == nil {
+				slog.InfoContext(c.Context(), "actividad late_submission_allowed toggled",
+					"event", "actividad_config_changed", "actividad_id", actividadID,
+					"docente_id", docenteID, "new_value", *req.LateSubmissionAllowed)
+				return c.JSON(updated)
+			}
+			// Re-fetch fresh state before applying the remaining field updates
+			existing = updated
+		}
+
 		var updated *Actividad
 		if existing.HasSubmissions {
 			// Only deadline and instructions can be changed

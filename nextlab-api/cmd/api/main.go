@@ -20,6 +20,7 @@ import (
 	"github.com/Elder2003/nextlab-api/internal/auth"
 	"github.com/Elder2003/nextlab-api/internal/config"
 	"github.com/Elder2003/nextlab-api/internal/health"
+	"github.com/Elder2003/nextlab-api/internal/submission"
 	embeddedmigrations "github.com/Elder2003/nextlab-api/migrations"
 )
 
@@ -82,12 +83,27 @@ func main() {
 
 	// Connect to MinIO
 	minioClient, err := minio.New(cfg.MinioEndpoint, &minio.Options{
-		Creds: credentials.NewStaticV4(cfg.MinioAccessKey, cfg.MinioSecretKey, ""),
+		Creds:  credentials.NewStaticV4(cfg.MinioAccessKey, cfg.MinioSecretKey, ""),
+		Secure: cfg.MinioUseSSL,
 	})
 	if err != nil {
 		slog.Error("failed to initialize minio", "err", err)
 		os.Exit(1)
 	}
+
+	// Ensure the submissions bucket exists
+	exists, err := minioClient.BucketExists(ctx, cfg.MinioBucket)
+	if err != nil {
+		slog.Error("failed to check minio bucket", "bucket", cfg.MinioBucket, "err", err)
+		os.Exit(1)
+	}
+	if !exists {
+		if err := minioClient.MakeBucket(ctx, cfg.MinioBucket, minio.MakeBucketOptions{}); err != nil {
+			slog.Error("failed to create minio bucket", "bucket", cfg.MinioBucket, "err", err)
+			os.Exit(1)
+		}
+	}
+	slog.Info("minio ready", slog.String("bucket", cfg.MinioBucket), slog.String("correlation_id", "system"))
 
 	app := fiber.New()
 	app.Use(correlationIDMiddleware())
@@ -102,6 +118,7 @@ func main() {
 
 	auth.RegisterRoutes(app, pgPool, redisClient, cfg)
 	academic.RegisterRoutes(app, pgPool, redisClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
+	submission.RegisterRoutes(app, pgPool, minioClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
 
 	slog.Info("server started",
 		slog.String("service", "api"),

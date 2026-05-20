@@ -463,7 +463,7 @@ func RemoveStudentFromGrupo(ctx context.Context, db *pgxpool.Pool, userID, grupo
 
 func GetActividadesByCurso(ctx context.Context, db *pgxpool.Pool, cursoID uuid.UUID) ([]Actividad, error) {
 	rows, err := db.Query(ctx,
-		`SELECT id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, created_at, updated_at
+		`SELECT id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, created_at, updated_at
 		 FROM actividades WHERE curso_id = $1 ORDER BY deadline`, cursoID)
 	if err != nil {
 		return nil, err
@@ -473,7 +473,7 @@ func GetActividadesByCurso(ctx context.Context, db *pgxpool.Pool, cursoID uuid.U
 	for rows.Next() {
 		var a Actividad
 		if err := rows.Scan(&a.ID, &a.CursoID, &a.Title, &a.Tipo, &a.Deadline, &a.Instructions,
-			&a.TraceEnabled, &a.HasSubmissions, &a.CreatedAt, &a.UpdatedAt); err != nil {
+			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &a.CreatedAt, &a.UpdatedAt); err != nil {
 			return nil, err
 		}
 		list = append(list, a)
@@ -484,10 +484,10 @@ func GetActividadesByCurso(ctx context.Context, db *pgxpool.Pool, cursoID uuid.U
 func GetActividadByIDAndCurso(ctx context.Context, db *pgxpool.Pool, id, cursoID uuid.UUID) (*Actividad, error) {
 	a := &Actividad{}
 	err := db.QueryRow(ctx,
-		`SELECT id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, created_at, updated_at
+		`SELECT id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, created_at, updated_at
 		 FROM actividades WHERE id = $1 AND curso_id = $2`, id, cursoID).
 		Scan(&a.ID, &a.CursoID, &a.Title, &a.Tipo, &a.Deadline, &a.Instructions,
-			&a.TraceEnabled, &a.HasSubmissions, &a.CreatedAt, &a.UpdatedAt)
+			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &a.CreatedAt, &a.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -497,10 +497,10 @@ func GetActividadByIDAndCurso(ctx context.Context, db *pgxpool.Pool, id, cursoID
 func GetActividadByID(ctx context.Context, db *pgxpool.Pool, id uuid.UUID) (*Actividad, error) {
 	a := &Actividad{}
 	err := db.QueryRow(ctx,
-		`SELECT id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, created_at, updated_at
+		`SELECT id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, created_at, updated_at
 		 FROM actividades WHERE id = $1`, id).
 		Scan(&a.ID, &a.CursoID, &a.Title, &a.Tipo, &a.Deadline, &a.Instructions,
-			&a.TraceEnabled, &a.HasSubmissions, &a.CreatedAt, &a.UpdatedAt)
+			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &a.CreatedAt, &a.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -512,10 +512,10 @@ func CreateActividad(ctx context.Context, db *pgxpool.Pool, cursoID uuid.UUID, t
 	err := db.QueryRow(ctx,
 		`INSERT INTO actividades (curso_id, title, tipo, deadline, instructions)
 		 VALUES ($1, $2, $3::actividad_tipo, $4, $5)
-		 RETURNING id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, created_at, updated_at`,
+		 RETURNING id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, created_at, updated_at`,
 		cursoID, title, tipo, deadline, instructions).
 		Scan(&a.ID, &a.CursoID, &a.Title, &a.Tipo, &a.Deadline, &a.Instructions,
-			&a.TraceEnabled, &a.HasSubmissions, &a.CreatedAt, &a.UpdatedAt)
+			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -530,10 +530,10 @@ func UpdateActividad(ctx context.Context, db *pgxpool.Pool, id, cursoID uuid.UUI
 		   instructions = COALESCE($4, instructions),
 		   updated_at   = NOW()
 		 WHERE id = $1 AND curso_id = $2
-		 RETURNING id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, created_at, updated_at`,
+		 RETURNING id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, created_at, updated_at`,
 		id, cursoID, deadline, instructions).
 		Scan(&a.ID, &a.CursoID, &a.Title, &a.Tipo, &a.Deadline, &a.Instructions,
-			&a.TraceEnabled, &a.HasSubmissions, &a.CreatedAt, &a.UpdatedAt)
+			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &a.CreatedAt, &a.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -550,14 +550,59 @@ func UpdateActividadFull(ctx context.Context, db *pgxpool.Pool, id, cursoID uuid
 		   instructions = $6,
 		   updated_at   = NOW()
 		 WHERE id = $1 AND curso_id = $2
-		 RETURNING id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, created_at, updated_at`,
+		 RETURNING id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, created_at, updated_at`,
 		id, cursoID, title, tipo, deadline, instructions).
 		Scan(&a.ID, &a.CursoID, &a.Title, &a.Tipo, &a.Deadline, &a.Instructions,
-			&a.TraceEnabled, &a.HasSubmissions, &a.CreatedAt, &a.UpdatedAt)
+			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &a.CreatedAt, &a.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	return a, err
+}
+
+// UpdateLateSubmissionFlag atomically updates late_submission_allowed and inserts an audit log entry.
+func UpdateLateSubmissionFlag(ctx context.Context, db *pgxpool.Pool, actividadID, docenteID uuid.UUID, newVal bool) (*Actividad, error) {
+	tx, err := db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	a := &Actividad{}
+	err = tx.QueryRow(ctx,
+		`UPDATE actividades SET late_submission_allowed = $1, updated_at = NOW()
+		 WHERE id = $2
+		   AND curso_id IN (SELECT id FROM cursos WHERE docente_id = $3)
+		 RETURNING id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, created_at, updated_at`,
+		newVal, actividadID, docenteID).
+		Scan(&a.ID, &a.CursoID, &a.Title, &a.Tipo, &a.Deadline, &a.Instructions,
+			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &a.CreatedAt, &a.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	prev := "false"
+	if !newVal {
+		prev = "true"
+	}
+	next := "true"
+	if !newVal {
+		next = "false"
+	}
+	_, err = tx.Exec(ctx,
+		`INSERT INTO actividad_config_changes
+		   (actividad_id, changed_by, field_name, previous_value, new_value)
+		 VALUES ($1, $2, 'late_submission_allowed', $3, $4)`,
+		actividadID, docenteID, prev, next,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return a, tx.Commit(ctx)
 }
 
 func DeleteActividad(ctx context.Context, db *pgxpool.Pool, id, cursoID uuid.UUID) error {

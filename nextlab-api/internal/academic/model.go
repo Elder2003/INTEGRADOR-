@@ -62,16 +62,27 @@ type Grupo struct {
 }
 
 type Actividad struct {
-	ID             uuid.UUID `json:"id"`
-	CursoID        uuid.UUID `json:"curso_id"`
-	Title          string    `json:"title"`
-	Tipo           string    `json:"tipo"`
-	Deadline       time.Time `json:"deadline"`
-	Instructions   string    `json:"instructions"`
-	TraceEnabled   bool      `json:"trace_enabled"`
-	HasSubmissions bool      `json:"has_submissions,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID                   uuid.UUID `json:"id"`
+	CursoID              uuid.UUID `json:"curso_id"`
+	Title                string    `json:"title"`
+	Tipo                 string    `json:"tipo"`
+	Deadline             time.Time `json:"deadline"`
+	Instructions         string    `json:"instructions"`
+	TraceEnabled         bool      `json:"trace_enabled"`
+	HasSubmissions       bool      `json:"has_submissions,omitempty"`
+	LateSubmissionAllowed bool     `json:"late_submission_allowed"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
+}
+
+type ActivityConfigChange struct {
+	ID            uuid.UUID `json:"id"`
+	ActividadID   uuid.UUID `json:"actividad_id"`
+	ChangedBy     uuid.UUID `json:"changed_by"`
+	FieldName     string    `json:"field_name"`
+	PreviousValue string    `json:"previous_value"`
+	NewValue      string    `json:"new_value"`
+	ChangedAt     time.Time `json:"changed_at"`
 }
 
 type Inscripcion struct {
@@ -178,10 +189,11 @@ type CreateActividadRequest struct {
 }
 
 type UpdateActividadRequest struct {
-	Title        *string    `json:"title"`
-	Tipo         *string    `json:"tipo"`
-	Deadline     *time.Time `json:"deadline"`
-	Instructions *string    `json:"instructions"`
+	Title                 *string    `json:"title"`
+	Tipo                  *string    `json:"tipo"`
+	Deadline              *time.Time `json:"deadline"`
+	Instructions          *string    `json:"instructions"`
+	LateSubmissionAllowed *bool      `json:"late_submission_allowed"`
 }
 
 type CreateGrantRequest struct {
