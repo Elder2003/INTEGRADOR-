@@ -16,6 +16,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/Elder2003/nextlab-api/internal/academic"
 	"github.com/Elder2003/nextlab-api/internal/auth"
 	"github.com/Elder2003/nextlab-api/internal/config"
 	"github.com/Elder2003/nextlab-api/internal/health"
@@ -100,6 +101,7 @@ func main() {
 	})
 
 	auth.RegisterRoutes(app, pgPool, redisClient, cfg)
+	academic.RegisterRoutes(app, pgPool, redisClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
 
 	slog.Info("server started",
 		slog.String("service", "api"),

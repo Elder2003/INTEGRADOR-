@@ -26,4 +26,8 @@ func RegisterRoutes(app *fiber.App, db *pgxpool.Pool, rdb *redis.Client, cfg *co
 	// US4: Password recovery
 	g.Post("/forgot-password", ForgotPasswordHandler(svc))
 	g.Post("/reset-password", ResetPasswordHandler(svc))
+
+	// US2 (M3): Google OAuth student login (public — no auth middleware)
+	g.Get("/google", GoogleLoginHandler(svc))
+	g.Get("/google/callback", GoogleCallbackHandler(svc))
 }

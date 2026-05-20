@@ -10,9 +10,10 @@ import (
 type User struct {
 	ID           uuid.UUID `db:"id"`
 	Email        string    `db:"email"`
-	PasswordHash string    `db:"password_hash"`
+	PasswordHash *string   `db:"password_hash"` // nil for Google OAuth students
 	Role         string    `db:"role"`
 	IsActive     bool      `db:"is_active"`
+	GoogleSub    *string   `db:"google_sub"`
 	CreatedAt    time.Time `db:"created_at"`
 	UpdatedAt    time.Time `db:"updated_at"`
 }

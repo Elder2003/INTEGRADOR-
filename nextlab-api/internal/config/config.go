@@ -8,17 +8,20 @@ import (
 )
 
 type Config struct {
-	DatabaseURL     string
-	RedisAddr       string
-	MinioEndpoint   string
-	MinioAccessKey  string
-	MinioSecretKey  string
-	APIPort         string
-	LogLevel        string
-	AppEnv          string
-	JWTSecret       string
-	AccessTokenTTL  time.Duration
-	RefreshTokenTTL time.Duration
+	DatabaseURL       string
+	RedisAddr         string
+	MinioEndpoint     string
+	MinioAccessKey    string
+	MinioSecretKey    string
+	APIPort           string
+	LogLevel          string
+	AppEnv            string
+	JWTSecret         string
+	AccessTokenTTL    time.Duration
+	RefreshTokenTTL   time.Duration
+	GoogleClientID     string
+	GoogleClientSecret string
+	GoogleRedirectURL  string
 }
 
 func Load() (*Config, error) {
@@ -32,26 +35,32 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		DatabaseURL:     getenv("DATABASE_URL", ""),
-		RedisAddr:       getenv("REDIS_ADDR", ""),
-		MinioEndpoint:   getenv("MINIO_ENDPOINT", ""),
-		MinioAccessKey:  getenv("MINIO_ACCESS_KEY", ""),
-		MinioSecretKey:  getenv("MINIO_SECRET_KEY", ""),
-		APIPort:         getenv("API_PORT", "8080"),
-		LogLevel:        getenv("LOG_LEVEL", "info"),
-		AppEnv:          getenv("APP_ENV", "development"),
-		JWTSecret:       getenv("JWT_SECRET", ""),
-		AccessTokenTTL:  accessTTL,
-		RefreshTokenTTL: refreshTTL,
+		DatabaseURL:        getenv("DATABASE_URL", ""),
+		RedisAddr:          getenv("REDIS_ADDR", ""),
+		MinioEndpoint:      getenv("MINIO_ENDPOINT", ""),
+		MinioAccessKey:     getenv("MINIO_ACCESS_KEY", ""),
+		MinioSecretKey:     getenv("MINIO_SECRET_KEY", ""),
+		APIPort:            getenv("API_PORT", "8080"),
+		LogLevel:           getenv("LOG_LEVEL", "info"),
+		AppEnv:             getenv("APP_ENV", "development"),
+		JWTSecret:          getenv("JWT_SECRET", ""),
+		AccessTokenTTL:     accessTTL,
+		RefreshTokenTTL:    refreshTTL,
+		GoogleClientID:     getenv("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret: getenv("GOOGLE_CLIENT_SECRET", ""),
+		GoogleRedirectURL:  getenv("GOOGLE_REDIRECT_URL", ""),
 	}
 
 	required := map[string]string{
-		"DATABASE_URL":   cfg.DatabaseURL,
-		"REDIS_ADDR":     cfg.RedisAddr,
-		"MINIO_ENDPOINT": cfg.MinioEndpoint,
-		"MINIO_ACCESS_KEY": cfg.MinioAccessKey,
-		"MINIO_SECRET_KEY": cfg.MinioSecretKey,
-		"JWT_SECRET":     cfg.JWTSecret,
+		"DATABASE_URL":          cfg.DatabaseURL,
+		"REDIS_ADDR":            cfg.RedisAddr,
+		"MINIO_ENDPOINT":        cfg.MinioEndpoint,
+		"MINIO_ACCESS_KEY":      cfg.MinioAccessKey,
+		"MINIO_SECRET_KEY":      cfg.MinioSecretKey,
+		"JWT_SECRET":            cfg.JWTSecret,
+		"GOOGLE_CLIENT_ID":      cfg.GoogleClientID,
+		"GOOGLE_CLIENT_SECRET":  cfg.GoogleClientSecret,
+		"GOOGLE_REDIRECT_URL":   cfg.GoogleRedirectURL,
 	}
 
 	for name, value := range required {

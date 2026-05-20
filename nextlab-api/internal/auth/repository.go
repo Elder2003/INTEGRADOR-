@@ -13,12 +13,29 @@ import (
 func GetUserByEmail(ctx context.Context, db *pgxpool.Pool, email string) (*User, error) {
 	u := &User{}
 	err := db.QueryRow(ctx,
-		`SELECT id, email, password_hash, role, is_active, created_at, updated_at
+		`SELECT id, email, password_hash, role, is_active, google_sub, created_at, updated_at
 		 FROM users WHERE email = $1`, email).
-		Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Role, &u.IsActive, &u.CreatedAt, &u.UpdatedAt)
+		Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Role, &u.IsActive, &u.GoogleSub, &u.CreatedAt, &u.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
+}
+
+// UpsertGoogleUser creates or updates a student user record after Google OAuth verification.
+func UpsertGoogleUser(ctx context.Context, db *pgxpool.Pool, email, googleSub string) (*User, error) {
+	u := &User{}
+	err := db.QueryRow(ctx,
+		`INSERT INTO users (email, role, google_sub)
+		 VALUES ($1, 'estudiante', $2)
+		 ON CONFLICT (email) DO UPDATE
+		   SET google_sub = EXCLUDED.google_sub, updated_at = NOW()
+		 RETURNING id, email, password_hash, role, is_active, google_sub, created_at, updated_at`,
+		email, googleSub).
+		Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Role, &u.IsActive, &u.GoogleSub, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}

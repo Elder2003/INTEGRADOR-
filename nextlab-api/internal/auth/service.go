@@ -61,7 +61,13 @@ func (s *Service) Authenticate(ctx context.Context, email, password, ip string) 
 		return nil, ErrAccountInactive
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+	if user.PasswordHash == nil {
+		// Student account — uses Google OAuth only, not email/password login.
+		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
+		return nil, ErrInvalidCredentials
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(password)); err != nil {
 		slog.WarnContext(ctx, "login failed: wrong password",
 			"event", "login_failed", "email", email, "ip", ip,
 			"correlation_id", correlationIDFromCtx(ctx))
@@ -285,9 +291,9 @@ func hashToken(raw string) string {
 func getUserByID(ctx context.Context, db *pgxpool.Pool, id uuid.UUID) (*User, error) {
 	u := &User{}
 	err := db.QueryRow(ctx,
-		`SELECT id, email, password_hash, role, is_active, created_at, updated_at
+		`SELECT id, email, password_hash, role, is_active, google_sub, created_at, updated_at
 		 FROM users WHERE id = $1`, id).
-		Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Role, &u.IsActive, &u.CreatedAt, &u.UpdatedAt)
+		Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Role, &u.IsActive, &u.GoogleSub, &u.CreatedAt, &u.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
