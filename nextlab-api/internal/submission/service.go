@@ -14,6 +14,11 @@ import (
 	"github.com/minio/minio-go/v7"
 )
 
+// TracingService is implemented by *tracing.Service; defined here to avoid import cycles.
+type TracingService interface {
+	CloseSessionWithSubmission(ctx context.Context, studentID, actividadID, submissionID uuid.UUID)
+}
+
 const maxFileSizeBytes = 52_428_800 // 50 MB
 
 var (
@@ -35,9 +40,10 @@ var validTipos = map[string]bool{
 
 // Service handles all submission business logic.
 type Service struct {
-	repo   *Repository
-	mc     *minio.Client
-	bucket string
+	repo       *Repository
+	mc         *minio.Client
+	bucket     string
+	tracingSvc TracingService
 }
 
 // StreamResult carries an open MinIO object reader plus metadata for download handlers.
@@ -140,6 +146,10 @@ func (s *Service) UploadFile(ctx context.Context, studentID, actividadID uuid.UU
 		return nil, err
 	}
 
+	if act.TraceEnabled && s.tracingSvc != nil {
+		s.tracingSvc.CloseSessionWithSubmission(ctx, studentID, actividadID, sub.ID)
+	}
+
 	resp := toResponse(sub)
 	return &resp, nil
 }
@@ -194,6 +204,10 @@ func (s *Service) ReplaceFile(ctx context.Context, studentID, actividadID uuid.U
 	if err := s.repo.UpdateSubmission(ctx, studentID, actividadID, newKey, header.Filename, mimeType, header.Size, now, isLate); err != nil {
 		_ = s.mc.RemoveObject(ctx, s.bucket, newKey, minio.RemoveObjectOptions{})
 		return nil, err
+	}
+
+	if act != nil && act.TraceEnabled && s.tracingSvc != nil {
+		s.tracingSvc.CloseSessionWithSubmission(ctx, studentID, actividadID, existing.ID)
 	}
 
 	_ = s.mc.RemoveObject(ctx, s.bucket, oldKey, minio.RemoveObjectOptions{})

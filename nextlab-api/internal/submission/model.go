@@ -124,6 +124,7 @@ type ActividadInfo struct {
 	LateSubmissionAllowed bool
 	HasSubmissions       bool
 	CursoIsActive        bool
+	TraceEnabled         bool
 }
 
 // ─── Errors ───────────────────────────────────────────────────────────────────

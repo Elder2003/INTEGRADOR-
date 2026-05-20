@@ -16,9 +16,10 @@ func RegisterRoutes(
 	cfg *config.Config,
 	authMW fiber.Handler,
 	roleGuard func(roles ...string) fiber.Handler,
+	tracingSvc TracingService,
 ) {
 	repo := &Repository{db: db}
-	svc := &Service{repo: repo, mc: mc, bucket: cfg.MinioBucket}
+	svc := &Service{repo: repo, mc: mc, bucket: cfg.MinioBucket, tracingSvc: tracingSvc}
 
 	// ─── Student — submission lifecycle ──────────────────────────────────────
 	student := app.Group("/actividades", authMW, roleGuard("estudiante"))
