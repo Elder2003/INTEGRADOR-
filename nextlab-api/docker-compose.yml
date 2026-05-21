@@ -75,6 +75,13 @@ services:
       AI_PRIMARY_TIMEOUT_SECS: "30"
       AI_CLOUD_URL: ""       # set to Vercel AI Gateway URL for cloud/auto mode
       AI_CLOUD_API_KEY: ""   # set to Vercel AI Gateway API key for cloud/auto mode
+      # Dual RAG Pipeline (M7)
+      AI_EMBED_URL: http://ollama:11434
+      AI_EMBED_MODEL: nomic-embed-text
+      AI_EMBED_DIMENSION: "1536"
+      RAG_CHUNK_TOKENS: "512"
+      RAG_CHUNK_OVERLAP: "64"
+      RAG_TOKEN_BUDGET: "2048"
     ports:
       - "8080:8080"
     depends_on:

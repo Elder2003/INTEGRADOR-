@@ -21,6 +21,7 @@ import (
 	"github.com/Elder2003/nextlab-api/internal/auth"
 	"github.com/Elder2003/nextlab-api/internal/config"
 	"github.com/Elder2003/nextlab-api/internal/health"
+	"github.com/Elder2003/nextlab-api/internal/rag"
 	"github.com/Elder2003/nextlab-api/internal/submission"
 	"github.com/Elder2003/nextlab-api/internal/tracing"
 	embeddedmigrations "github.com/Elder2003/nextlab-api/migrations"
@@ -123,6 +124,7 @@ func main() {
 	tracingSvc := tracing.RegisterRoutes(app, pgPool, redisClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
 	submission.RegisterRoutes(app, pgPool, minioClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard, tracingSvc)
 	ai.RegisterRoutes(app, pgPool, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
+	rag.RegisterRoutes(app, pgPool, minioClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
 
 	slog.Info("server started",
 		slog.String("service", "api"),

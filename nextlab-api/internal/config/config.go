@@ -31,6 +31,13 @@ type Config struct {
 	AICloudURL           string
 	AICloudAPIKey        string
 	AIPrimaryTimeoutSecs int
+
+	AIEmbedURL       string
+	AIEmbedModel     string
+	AIEmbedDimension int
+	RAGChunkTokens   int
+	RAGChunkOverlap  int
+	RAGTokenBudget   int
 }
 
 func Load() (*Config, error) {
@@ -67,6 +74,13 @@ func Load() (*Config, error) {
 		AICloudAPIKey:        getenv("AI_CLOUD_API_KEY", ""),
 		AIPrimaryTimeoutSecs: parseInt(getenv("AI_PRIMARY_TIMEOUT_SECS", "30")),
 	}
+
+	cfg.AIEmbedURL       = getenv("AI_EMBED_URL", cfg.AICloudURL)
+	cfg.AIEmbedModel     = getenv("AI_EMBED_MODEL", "text-embedding-3-small")
+	cfg.AIEmbedDimension = parseInt(getenv("AI_EMBED_DIMENSION", "1536"))
+	cfg.RAGChunkTokens   = parseInt(getenv("RAG_CHUNK_TOKENS", "512"))
+	cfg.RAGChunkOverlap  = parseInt(getenv("RAG_CHUNK_OVERLAP", "64"))
+	cfg.RAGTokenBudget   = parseInt(getenv("RAG_TOKEN_BUDGET", "2048"))
 
 	required := map[string]string{
 		"DATABASE_URL":          cfg.DatabaseURL,
