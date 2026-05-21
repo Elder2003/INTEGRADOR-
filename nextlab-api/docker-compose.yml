@@ -46,6 +46,13 @@ services:
     volumes:
       - minio_data:/data
 
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
   api:
     build:
       context: .
@@ -62,6 +69,12 @@ services:
       JWT_SECRET: nextlab-dev-secret-key-change-in-production-env
       ACCESS_TOKEN_TTL: 15m
       REFRESH_TOKEN_TTL: 168h
+      # AI Router (M6)
+      AI_PRIMARY_URL: http://ollama:11434
+      AI_PRIMARY_MODEL: llama3
+      AI_PRIMARY_TIMEOUT_SECS: "30"
+      AI_CLOUD_URL: ""       # set to Vercel AI Gateway URL for cloud/auto mode
+      AI_CLOUD_API_KEY: ""   # set to Vercel AI Gateway API key for cloud/auto mode
     ports:
       - "8080:8080"
     depends_on:
@@ -103,3 +116,4 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+  ollama_data:

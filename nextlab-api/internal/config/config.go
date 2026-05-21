@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -24,6 +25,12 @@ type Config struct {
 	GoogleClientID     string
 	GoogleClientSecret string
 	GoogleRedirectURL  string
+
+	AIPrimaryURL         string
+	AIPrimaryModel       string
+	AICloudURL           string
+	AICloudAPIKey        string
+	AIPrimaryTimeoutSecs int
 }
 
 func Load() (*Config, error) {
@@ -53,6 +60,12 @@ func Load() (*Config, error) {
 		GoogleClientID:     getenv("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret: getenv("GOOGLE_CLIENT_SECRET", ""),
 		GoogleRedirectURL:  getenv("GOOGLE_REDIRECT_URL", ""),
+
+		AIPrimaryURL:         getenv("AI_PRIMARY_URL", ""),
+		AIPrimaryModel:       getenv("AI_PRIMARY_MODEL", "llama3"),
+		AICloudURL:           getenv("AI_CLOUD_URL", ""),
+		AICloudAPIKey:        getenv("AI_CLOUD_API_KEY", ""),
+		AIPrimaryTimeoutSecs: parseInt(getenv("AI_PRIMARY_TIMEOUT_SECS", "30")),
 	}
 
 	required := map[string]string{
@@ -65,6 +78,7 @@ func Load() (*Config, error) {
 		"GOOGLE_CLIENT_ID":      cfg.GoogleClientID,
 		"GOOGLE_CLIENT_SECRET":  cfg.GoogleClientSecret,
 		"GOOGLE_REDIRECT_URL":   cfg.GoogleRedirectURL,
+		"AI_PRIMARY_URL":        cfg.AIPrimaryURL,
 	}
 
 	for name, value := range required {
@@ -72,6 +86,14 @@ func Load() (*Config, error) {
 			slog.Error("missing required environment variable", "var", name)
 			return nil, fmt.Errorf("missing required environment variable: %s", name)
 		}
+	}
+
+	// Cloud AI vars are only required when mode is auto/cloud — warn if absent.
+	if cfg.AICloudURL == "" {
+		slog.Warn("AI_CLOUD_URL not set; cloud/auto routing mode will fail if activated")
+	}
+	if cfg.AICloudAPIKey == "" {
+		slog.Warn("AI_CLOUD_API_KEY not set; cloud/auto routing mode will fail if activated")
 	}
 
 	if len(cfg.JWTSecret) < 32 {
@@ -87,6 +109,11 @@ func getenv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func parseInt(s string) int {
+	n, _ := strconv.Atoi(s)
+	return n
 }
 
 func parseDuration(envKey, defaultValue string) (time.Duration, error) {
