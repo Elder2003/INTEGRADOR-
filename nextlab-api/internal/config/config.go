@@ -38,6 +38,11 @@ type Config struct {
 	RAGChunkTokens   int
 	RAGChunkOverlap  int
 	RAGTokenBudget   int
+
+	HeuristicTabWeight      int
+	HeuristicClipWeight     int
+	HeuristicGapWeight      int
+	HeuristicHighThreshold  int
 }
 
 func Load() (*Config, error) {
@@ -81,6 +86,12 @@ func Load() (*Config, error) {
 	cfg.RAGChunkTokens   = parseInt(getenv("RAG_CHUNK_TOKENS", "512"))
 	cfg.RAGChunkOverlap  = parseInt(getenv("RAG_CHUNK_OVERLAP", "64"))
 	cfg.RAGTokenBudget   = parseInt(getenv("RAG_TOKEN_BUDGET", "2048"))
+
+	// Detection Engine (M8) — configurable per institution to tune false-positive rates
+	cfg.HeuristicTabWeight     = parseInt(getenv("HEURISTIC_TAB_WEIGHT", "5"))
+	cfg.HeuristicClipWeight    = parseInt(getenv("HEURISTIC_CLIP_WEIGHT", "3"))
+	cfg.HeuristicGapWeight     = parseInt(getenv("HEURISTIC_GAP_WEIGHT", "2"))
+	cfg.HeuristicHighThreshold = parseInt(getenv("HEURISTIC_HIGH_THRESHOLD", "60"))
 
 	required := map[string]string{
 		"DATABASE_URL":          cfg.DatabaseURL,

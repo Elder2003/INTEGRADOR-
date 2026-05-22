@@ -82,6 +82,11 @@ services:
       RAG_CHUNK_TOKENS: "512"
       RAG_CHUNK_OVERLAP: "64"
       RAG_TOKEN_BUDGET: "2048"
+      # Detection Engine (M8)
+      HEURISTIC_TAB_WEIGHT: "5"
+      HEURISTIC_CLIP_WEIGHT: "3"
+      HEURISTIC_GAP_WEIGHT: "2"
+      HEURISTIC_HIGH_THRESHOLD: "60"
     ports:
       - "8080:8080"
     depends_on:
@@ -106,6 +111,25 @@ services:
       API_PORT: 8080
       LOG_LEVEL: info
       APP_ENV: development
+      JWT_SECRET: nextlab-dev-secret-key-change-in-production-env
+      # AI Router (M6)
+      AI_PRIMARY_URL: http://ollama:11434
+      AI_PRIMARY_MODEL: llama3
+      AI_PRIMARY_TIMEOUT_SECS: "30"
+      AI_CLOUD_URL: ""
+      AI_CLOUD_API_KEY: ""
+      # Dual RAG Pipeline (M7)
+      AI_EMBED_URL: http://ollama:11434
+      AI_EMBED_MODEL: nomic-embed-text
+      AI_EMBED_DIMENSION: "1536"
+      RAG_CHUNK_TOKENS: "512"
+      RAG_CHUNK_OVERLAP: "64"
+      RAG_TOKEN_BUDGET: "2048"
+      # Detection Engine (M8)
+      HEURISTIC_TAB_WEIGHT: "5"
+      HEURISTIC_CLIP_WEIGHT: "3"
+      HEURISTIC_GAP_WEIGHT: "2"
+      HEURISTIC_HIGH_THRESHOLD: "60"
     depends_on:
       api:
         condition: service_started

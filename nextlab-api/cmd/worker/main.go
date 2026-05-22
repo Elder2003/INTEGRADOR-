@@ -9,9 +9,16 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/redis/go-redis/v9"
 
+	"github.com/google/uuid"
+
+	"github.com/Elder2003/nextlab-api/internal/ai"
 	"github.com/Elder2003/nextlab-api/internal/config"
+	"github.com/Elder2003/nextlab-api/internal/detection"
+	"github.com/Elder2003/nextlab-api/internal/rag"
 	"github.com/Elder2003/nextlab-api/internal/tracing"
 )
 
@@ -59,6 +66,31 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Connect to MinIO
+	minioClient, err := minio.New(cfg.MinioEndpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(cfg.MinioAccessKey, cfg.MinioSecretKey, ""),
+		Secure: cfg.MinioUseSSL,
+	})
+	if err != nil {
+		slog.Error("failed to initialize minio", "err", err)
+		os.Exit(1)
+	}
+
+	// Build detection dependencies
+	aiRepo := ai.NewRepository(pgPool)
+	aiSvc := ai.NewService(aiRepo, cfg)
+	embedClient := rag.NewEmbedClient(cfg)
+	ragSvc := rag.NewRetrieveService(
+		rag.NewCurricularRepository(pgPool),
+		rag.NewDocenteRepository(pgPool),
+		embedClient,
+		cfg,
+	)
+	detectionRepo := detection.NewDetectionRepository(pgPool)
+	heuristicEngine := detection.NewHeuristicEngine(cfg)
+	detectionSvc := detection.NewDetectionService(detectionRepo, heuristicEngine, aiSvc, ragSvc, minioClient, cfg.MinioBucket, cfg)
+	workerHandler := detection.NewWorkerHandler(detectionSvc)
+
 	repo := tracing.NewRepository(pgPool, rdb)
 	svc := tracing.NewService(repo, rdb)
 
@@ -77,7 +109,7 @@ func main() {
 	go runOrphanClaimer(ctx, svc, rdb)
 
 	// Main: consume Redis Streams
-	runConsumerLoop(ctx, svc, rdb)
+	runConsumerLoop(ctx, svc, rdb, workerHandler)
 
 	// Graceful shutdown
 	quit := make(chan os.Signal, 1)
@@ -87,7 +119,7 @@ func main() {
 }
 
 // runConsumerLoop reads jobs from the Redis stream and processes them.
-func runConsumerLoop(ctx context.Context, svc *tracing.Service, rdb *redis.Client) {
+func runConsumerLoop(ctx context.Context, svc *tracing.Service, rdb *redis.Client, wh *detection.WorkerHandler) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -113,18 +145,18 @@ func runConsumerLoop(ctx context.Context, svc *tracing.Service, rdb *redis.Clien
 
 		for _, stream := range results {
 			for _, msg := range stream.Messages {
-				processMessage(ctx, svc, rdb, msg)
+				processMessage(ctx, svc, rdb, msg, wh)
 			}
 		}
 	}
 }
 
 // processMessage handles a single stream message.
-func processMessage(ctx context.Context, svc *tracing.Service, rdb *redis.Client, msg redis.XMessage) {
+func processMessage(ctx context.Context, svc *tracing.Service, rdb *redis.Client, msg redis.XMessage, wh *detection.WorkerHandler) {
 	jobIDStr, _ := msg.Values["job_id"].(string)
 	slog.InfoContext(ctx, "processing job", "job_id", jobIDStr, "stream_id", msg.ID)
 
-	if err := processJob(ctx, svc, msg.Values); err != nil {
+	if err := processJob(ctx, wh, msg.Values); err != nil {
 		slog.ErrorContext(ctx, "job failed", "job_id", jobIDStr, "err", err)
 		// Leave in PEL; will be re-claimed by orphan claimer on next sweep
 		return
@@ -135,17 +167,16 @@ func processMessage(ctx context.Context, svc *tracing.Service, rdb *redis.Client
 	}
 }
 
-// processJob marks the job processing → done and performs analysis work.
-func processJob(ctx context.Context, svc *tracing.Service, values map[string]interface{}) error {
-	jobIDStr, _ := values["job_id"].(string)
+// processJob runs the detection pipeline for the session carried in the stream message.
+func processJob(ctx context.Context, wh *detection.WorkerHandler, values map[string]interface{}) error {
 	sessionIDStr, _ := values["session_id"].(string)
+	sessionID, err := uuid.Parse(sessionIDStr)
+	if err != nil {
+		slog.ErrorContext(ctx, "invalid session_id in stream message", "raw", sessionIDStr)
+		return nil // ack and discard malformed messages
+	}
 
-	slog.InfoContext(ctx, "job done",
-		slog.String("job_id", jobIDStr),
-		slog.String("session_id", sessionIDStr),
-	)
-	// Placeholder: future analysis work (anti-cheat scoring, risk flags, etc.)
-	return nil
+	return wh.Run(ctx, sessionID)
 }
 
 // reEnqueueOrphans re-enqueues pending jobs that were never XADD'd.
