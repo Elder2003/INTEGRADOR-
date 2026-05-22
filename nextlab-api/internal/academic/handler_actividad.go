@@ -3,10 +3,33 @@ package academic
 import (
 	"log/slog"
 
+	"github.com/Elder2003/nextlab-api/internal/format"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+func validateFormatRules(rules *format.FormatRulesConfig) bool {
+	if rules == nil {
+		return true
+	}
+	if rules.MinPages != nil && *rules.MinPages < 0 {
+		return false
+	}
+	if rules.MaxPages != nil && *rules.MaxPages < 0 {
+		return false
+	}
+	if rules.MinWordCount != nil && *rules.MinWordCount < 0 {
+		return false
+	}
+	if rules.MinPages != nil && rules.MaxPages != nil && *rules.MinPages > *rules.MaxPages {
+		return false
+	}
+	if rules.RequiredTypes != nil && len(rules.RequiredTypes) == 0 {
+		return false
+	}
+	return true
+}
 
 // ─── Docente — Actividades ────────────────────────────────────────────────────
 
@@ -39,8 +62,13 @@ func CreateActividadHandler(db *pgxpool.Pool) fiber.Handler {
 				Error: "validation_error", Message: "title, tipo, and deadline are required", CorrelationID: correlationID(c),
 			})
 		}
+		if !validateFormatRules(req.FormatRules) {
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(ErrorResponse{
+				Error: "invalid_format_rules", Message: "min_pages must be <= max_pages; values must be non-negative; required_types must not be empty if provided", CorrelationID: correlationID(c),
+			})
+		}
 
-		actividad, err := CreateActividad(c.Context(), db, cursoID, req.Title, req.Tipo, req.Deadline, req.Instructions)
+		actividad, err := CreateActividad(c.Context(), db, cursoID, req.Title, req.Tipo, req.Deadline, req.Instructions, req.FormatRules)
 		if err != nil {
 			if isInvalidEnumValue(err) {
 				return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
@@ -162,6 +190,11 @@ func UpdateActividadHandler(db *pgxpool.Pool) fiber.Handler {
 				Error: "invalid_request", Message: "invalid body", CorrelationID: correlationID(c),
 			})
 		}
+		if !validateFormatRules(req.FormatRules) {
+			return c.Status(fiber.StatusUnprocessableEntity).JSON(ErrorResponse{
+				Error: "invalid_format_rules", Message: "min_pages must be <= max_pages; values must be non-negative; required_types must not be empty if provided", CorrelationID: correlationID(c),
+			})
+		}
 
 		if err := GuardActivityMutation(existing, &req, false); err != nil {
 			if err == ErrActivityFieldLocked {
@@ -194,10 +227,11 @@ func UpdateActividadHandler(db *pgxpool.Pool) fiber.Handler {
 			existing = updated
 		}
 
+		updateFmtRules := req.FormatRules != nil
 		var updated *Actividad
 		if existing.HasSubmissions {
-			// Only deadline and instructions can be changed
-			updated, err = UpdateActividad(c.Context(), db, actividadID, cursoID, req.Deadline, req.Instructions)
+			// Only deadline, instructions, and format_rules can be changed
+			updated, err = UpdateActividad(c.Context(), db, actividadID, cursoID, req.Deadline, req.Instructions, req.FormatRules, updateFmtRules)
 		} else {
 			// All fields can change; use full update if any is provided
 			title := existing.Title
@@ -216,7 +250,7 @@ func UpdateActividadHandler(db *pgxpool.Pool) fiber.Handler {
 			if req.Instructions != nil {
 				instructions = *req.Instructions
 			}
-			updated, err = UpdateActividadFull(c.Context(), db, actividadID, cursoID, title, tipo, deadline, instructions)
+			updated, err = UpdateActividadFull(c.Context(), db, actividadID, cursoID, title, tipo, deadline, instructions, req.FormatRules, updateFmtRules)
 		}
 		if err != nil {
 			if isInvalidEnumValue(err) {

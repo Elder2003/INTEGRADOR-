@@ -3,6 +3,7 @@ package academic
 import (
 	"time"
 
+	"github.com/Elder2003/nextlab-api/internal/format"
 	"github.com/google/uuid"
 )
 
@@ -62,17 +63,18 @@ type Grupo struct {
 }
 
 type Actividad struct {
-	ID                   uuid.UUID `json:"id"`
-	CursoID              uuid.UUID `json:"curso_id"`
-	Title                string    `json:"title"`
-	Tipo                 string    `json:"tipo"`
-	Deadline             time.Time `json:"deadline"`
-	Instructions         string    `json:"instructions"`
-	TraceEnabled         bool      `json:"trace_enabled"`
-	HasSubmissions       bool      `json:"has_submissions,omitempty"`
-	LateSubmissionAllowed bool     `json:"late_submission_allowed"`
-	CreatedAt            time.Time `json:"created_at"`
-	UpdatedAt            time.Time `json:"updated_at"`
+	ID                    uuid.UUID                 `json:"id"`
+	CursoID               uuid.UUID                 `json:"curso_id"`
+	Title                 string                    `json:"title"`
+	Tipo                  string                    `json:"tipo"`
+	Deadline              time.Time                 `json:"deadline"`
+	Instructions          string                    `json:"instructions"`
+	TraceEnabled          bool                      `json:"trace_enabled"`
+	HasSubmissions        bool                      `json:"has_submissions,omitempty"`
+	LateSubmissionAllowed bool                      `json:"late_submission_allowed"`
+	FormatRules           *format.FormatRulesConfig `json:"format_rules,omitempty"`
+	CreatedAt             time.Time                 `json:"created_at"`
+	UpdatedAt             time.Time                 `json:"updated_at"`
 }
 
 type ActivityConfigChange struct {
@@ -182,18 +184,20 @@ type AssignStudentRequest struct {
 }
 
 type CreateActividadRequest struct {
-	Title        string    `json:"title"`
-	Tipo         string    `json:"tipo"`
-	Deadline     time.Time `json:"deadline"`
-	Instructions string    `json:"instructions"`
+	Title        string                    `json:"title"`
+	Tipo         string                    `json:"tipo"`
+	Deadline     time.Time                 `json:"deadline"`
+	Instructions string                    `json:"instructions"`
+	FormatRules  *format.FormatRulesConfig `json:"format_rules,omitempty"`
 }
 
 type UpdateActividadRequest struct {
-	Title                 *string    `json:"title"`
-	Tipo                  *string    `json:"tipo"`
-	Deadline              *time.Time `json:"deadline"`
-	Instructions          *string    `json:"instructions"`
-	LateSubmissionAllowed *bool      `json:"late_submission_allowed"`
+	Title                 *string                   `json:"title"`
+	Tipo                  *string                   `json:"tipo"`
+	Deadline              *time.Time                `json:"deadline"`
+	Instructions          *string                   `json:"instructions"`
+	LateSubmissionAllowed *bool                     `json:"late_submission_allowed"`
+	FormatRules           *format.FormatRulesConfig `json:"format_rules,omitempty"`
 }
 
 type CreateGrantRequest struct {

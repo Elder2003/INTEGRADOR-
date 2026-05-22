@@ -242,7 +242,7 @@ func (s *DetectionService) GetReport(ctx context.Context, sessionID, docenteID u
 		return nil, ErrForbidden
 	}
 
-	actividadID, _, studentID, err := s.repo.GetSessionForDetection(ctx, sessionID)
+	actividadID, submissionID, studentID, err := s.repo.GetSessionForDetection(ctx, sessionID)
 	if err != nil {
 		return nil, ErrNotFound
 	}
@@ -260,6 +260,11 @@ func (s *DetectionService) GetReport(ctx context.Context, sessionID, docenteID u
 		return nil, fmt.Errorf("get grade decision: %w", err)
 	}
 
+	formatReport, err := s.repo.GetFormatReport(ctx, sessionID, submissionID)
+	if err != nil {
+		slog.WarnContext(ctx, "could not fetch format report", "session_id", sessionID, "err", err)
+	}
+
 	llmStatus := "unavailable"
 	if llm != nil {
 		llmStatus = llm.LLMStatus
@@ -269,6 +274,7 @@ func (s *DetectionService) GetReport(ctx context.Context, sessionID, docenteID u
 		SessionID:     sessionID,
 		StudentID:     studentID,
 		ActividadID:   actividadID,
+		FormatReport:  formatReport,
 		Heuristic:     heuristic,
 		LLM:           llm,
 		LLMStatus:     llmStatus,

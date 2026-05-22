@@ -4,22 +4,29 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/Elder2003/nextlab-api/internal/format"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
 
-// WorkerHandler runs the two-phase detection pipeline for a completed exam session.
+// WorkerHandler runs the three-phase analysis pipeline for a completed exam session.
 type WorkerHandler struct {
-	svc *DetectionService
+	fmtSvc *format.FormatService
+	svc    *DetectionService
 }
 
-func NewWorkerHandler(svc *DetectionService) *WorkerHandler {
-	return &WorkerHandler{svc: svc}
+func NewWorkerHandler(fmtSvc *format.FormatService, svc *DetectionService) *WorkerHandler {
+	return &WorkerHandler{fmtSvc: fmtSvc, svc: svc}
 }
 
-// Run executes heuristic scoring then LLM analysis for the given session.
-// Both phases are idempotent and isolated; LLM failure is stored, not propagated.
+// Run executes format validation (phase 0), heuristic scoring (phase 1), and LLM analysis (phase 2).
+// All phases are idempotent and isolated; LLM failure is stored, not propagated.
 func (w *WorkerHandler) Run(ctx context.Context, sessionID uuid.UUID) error {
+	// Phase 0: format validation — fastest, always deterministic
+	if err := w.fmtSvc.Run(ctx, sessionID); err != nil {
+		slog.WarnContext(ctx, "format validation phase failed", "session_id", sessionID, "err", err)
+	}
+
 	if err := w.svc.RunHeuristic(ctx, sessionID); err != nil {
 		return err
 	}

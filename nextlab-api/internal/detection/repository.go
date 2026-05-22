@@ -2,14 +2,15 @@ package detection
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/Elder2003/nextlab-api/internal/format"
+	tracing "github.com/Elder2003/nextlab-api/internal/tracing"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	tracing "github.com/Elder2003/nextlab-api/internal/tracing"
 )
 
 type DetectionRepository struct {
@@ -223,6 +224,59 @@ func (r *DetectionRepository) VerifyDocenteOwnsSession(ctx context.Context, sess
 		sessionID, docenteID,
 	).Scan(&count)
 	return count > 0, err
+}
+
+// GetFormatReport fetches the format report for a session.
+// It first looks up the submission_id from the session, then queries format_reports.
+// Returns nil when the report is not yet available (pending).
+func (r *DetectionRepository) GetFormatReport(ctx context.Context, sessionID uuid.UUID, submissionID uuid.UUID) (*format.FormatReport, error) {
+	var query string
+	var arg any
+	if submissionID == uuid.Nil {
+		// No submission — look for no_submission record keyed by session_id
+		query = `SELECT id, submission_id, session_id, parse_status, fail_reason, file_type,
+		                page_count, word_count, char_count, doc_metadata, compliant, rule_results, created_at
+		         FROM format_reports WHERE session_id = $1 AND submission_id IS NULL LIMIT 1`
+		arg = sessionID
+	} else {
+		query = `SELECT id, submission_id, session_id, parse_status, fail_reason, file_type,
+		                page_count, word_count, char_count, doc_metadata, compliant, rule_results, created_at
+		         FROM format_reports WHERE submission_id = $1`
+		arg = submissionID
+	}
+
+	var rep format.FormatReport
+	var subID *uuid.UUID
+	var failReason, fileType *string
+	var metaJSON, rulesJSON []byte
+
+	err := r.db.QueryRow(ctx, query, arg).Scan(
+		&rep.ID, &subID, &rep.SessionID, &rep.ParseStatus, &failReason, &fileType,
+		&rep.PageCount, &rep.WordCount, &rep.CharCount, &metaJSON, &rep.Compliant, &rulesJSON, &rep.CreatedAt,
+	)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	rep.SubmissionID = subID
+	if failReason != nil {
+		rep.FailReason = *failReason
+	}
+	if fileType != nil {
+		rep.FileType = *fileType
+	}
+	if metaJSON != nil {
+		json.Unmarshal(metaJSON, &rep.DocMetadata) //nolint:errcheck
+	}
+	if rulesJSON != nil {
+		json.Unmarshal(rulesJSON, &rep.RuleResults) //nolint:errcheck
+	}
+	if rep.RuleResults == nil {
+		rep.RuleResults = []format.RuleResult{}
+	}
+	return &rep, nil
 }
 
 func strDeref(s *string) string {

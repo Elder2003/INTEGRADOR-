@@ -4,6 +4,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/Elder2003/nextlab-api/internal/format"
 	"github.com/google/uuid"
 )
 
@@ -36,6 +37,7 @@ type DetectionReport struct {
 	SessionID     uuid.UUID            `json:"session_id"`
 	StudentID     uuid.UUID            `json:"student_id"`
 	ActividadID   uuid.UUID            `json:"actividad_id"`
+	FormatReport  *format.FormatReport `json:"format_report"`
 	Heuristic     *HeuristicResult     `json:"heuristic"`
 	LLM           *LLMResult           `json:"llm"`
 	LLMStatus     string               `json:"llm_status"`
