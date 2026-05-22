@@ -22,6 +22,7 @@ import (
 	"github.com/Elder2003/nextlab-api/internal/config"
 	"github.com/Elder2003/nextlab-api/internal/detection"
 	"github.com/Elder2003/nextlab-api/internal/health"
+	"github.com/Elder2003/nextlab-api/internal/projects"
 	"github.com/Elder2003/nextlab-api/internal/rag"
 	"github.com/Elder2003/nextlab-api/internal/submission"
 	"github.com/Elder2003/nextlab-api/internal/tracing"
@@ -127,7 +128,7 @@ func main() {
 	ai.RegisterRoutes(app, pgPool, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
 	rag.RegisterRoutes(app, pgPool, minioClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
 
-	// Detection Engine (M8)
+	// Detection Engine (M8) — builds shared AI dependencies
 	detectionRepo := detection.NewDetectionRepository(pgPool)
 	heuristicEngine := detection.NewHeuristicEngine(cfg)
 	aiRepo := ai.NewRepository(pgPool)
@@ -141,6 +142,10 @@ func main() {
 	)
 	detectionSvc := detection.NewDetectionService(detectionRepo, heuristicEngine, aiSvc, ragSvc, minioClient, cfg.MinioBucket, cfg)
 	detection.RegisterRoutes(app, detectionSvc, auth.AuthMiddleware(cfg), auth.RoleGuard)
+
+	// Project Management (M10)
+	projectsModule := projects.NewModule(pgPool, minioClient, cfg.MinioBucket, aiSvc, cfg)
+	projectsModule.RegisterRoutes(app, auth.AuthMiddleware(cfg), auth.RoleGuard)
 
 	slog.Info("server started",
 		slog.String("service", "api"),

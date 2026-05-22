@@ -18,6 +18,8 @@ import (
 	"github.com/Elder2003/nextlab-api/internal/ai"
 	"github.com/Elder2003/nextlab-api/internal/config"
 	"github.com/Elder2003/nextlab-api/internal/detection"
+	"github.com/Elder2003/nextlab-api/internal/format"
+	"github.com/Elder2003/nextlab-api/internal/projects"
 	"github.com/Elder2003/nextlab-api/internal/rag"
 	"github.com/Elder2003/nextlab-api/internal/tracing"
 )
@@ -89,10 +91,15 @@ func main() {
 	detectionRepo := detection.NewDetectionRepository(pgPool)
 	heuristicEngine := detection.NewHeuristicEngine(cfg)
 	detectionSvc := detection.NewDetectionService(detectionRepo, heuristicEngine, aiSvc, ragSvc, minioClient, cfg.MinioBucket, cfg)
-	workerHandler := detection.NewWorkerHandler(detectionSvc)
+	fmtSvc := format.NewService(pgPool, minioClient, cfg.MinioBucket)
+	workerHandler := detection.NewWorkerHandler(fmtSvc, detectionSvc)
 
 	repo := tracing.NewRepository(pgPool, rdb)
 	svc := tracing.NewService(repo, rdb)
+
+	// M10: Git analysis worker
+	projectsRepo := projects.NewRepository(pgPool)
+	go runGitAnalysisLoop(ctx, projectsRepo, aiSvc)
 
 	// Create consumer group (idempotent — ignore BUSYGROUP error)
 	_ = rdb.XGroupCreateMkStream(ctx, streamName, consumerGroup, "0").Err()
@@ -263,6 +270,35 @@ func sweepTimedOut(ctx context.Context, svc *tracing.Service) {
 	for _, s := range sessions {
 		if err := svc.CloseSessionTimeout(ctx, s.ID); err != nil {
 			slog.ErrorContext(ctx, "failed to close timed-out session", "session_id", s.ID, "err", err)
+		}
+	}
+}
+
+// runGitAnalysisLoop polls git_analysis_jobs every 10 seconds and processes any queued jobs.
+func runGitAnalysisLoop(ctx context.Context, repo *projects.Repository, aiSvc *ai.Service) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			for {
+				job, err := repo.ClaimNextGitAnalysisJob(ctx)
+				if err != nil {
+					slog.ErrorContext(ctx, "claim git analysis job failed", "err", err)
+					break
+				}
+				if job == nil {
+					break
+				}
+				if err := projects.ProcessGitAnalysisJob(ctx, job, repo, aiSvc); err != nil {
+					slog.ErrorContext(ctx, "git analysis job failed", "job_id", job.ID, "err", err)
+					_ = repo.FailGitAnalysisJob(ctx, job.ID)
+				} else {
+					_ = repo.CompleteGitAnalysisJob(ctx, job.ID)
+				}
+			}
 		}
 	}
 }
