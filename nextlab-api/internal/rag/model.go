@@ -1,6 +1,21 @@
 package rag
 
-import "github.com/google/uuid"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+type CurricularDocumentSummary struct {
+	ID               uuid.UUID `json:"id"`
+	Carrera          string    `json:"carrera"`
+	Semestre         int       `json:"semestre"`
+	CodigoMateria    string    `json:"codigo_materia"`
+	OriginalFilename string    `json:"original_filename"`
+	IsRubric         bool      `json:"is_rubric"`
+	MinioPath        string    `json:"minio_path"`
+	CreatedAt        time.Time `json:"created_at"`
+}
 
 type CurricularDocument struct {
 	ID               uuid.UUID

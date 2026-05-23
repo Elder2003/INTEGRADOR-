@@ -12,20 +12,23 @@
 
 ### User Story 1 — Docente Account Management (Priority: P1)
 
-An administrator needs to provision, update, and deactivate docente (teacher) accounts. Currently the admin can manage student profiles, carreras, and materias, but has no way to manage docente accounts through the API.
+An administrator pre-provisions docente accounts (email + full name). Docentes authenticate exclusively via Google OAuth using their institutional email — no passwords are managed by the platform. The Google OAuth callback already checks whether the email is provisioned; admin creates that record here.
 
-**Why this priority**: Docente accounts gate all course/activity creation. Without admin control over docente accounts, the platform cannot be managed institutionally.
+**Why this priority**: Without a provisioned record, the docente's Google login is rejected with "account_not_provisioned". Admin account management is the gate for all docente access.
 
-**Independent Test**: `POST /admin/docentes` → 201; `GET /admin/docentes` → list contains new docente; `PUT /admin/docentes/:id` → 200; `DELETE /admin/docentes/:id` → 204 (soft deactivation); duplicate email → 409.
+**Independent Test**: `POST /admin/docentes` with `doc.*@unifranz.edu.bo` email → 201; `GET /admin/docentes` → list contains the new record; `PUT /admin/docentes/:id` → 200; `DELETE /admin/docentes/:id` → 204; same docente cannot log in via Google OAuth after deactivation; re-activate via `PUT is_active=true` → login works again.
 
 **Acceptance Scenarios**:
 
-1. **Given** admin is authenticated, **When** POST `/admin/docentes` with valid email and name, **Then** a new docente user is created with role=docente and a bcrypt-hashed temporary password, returning 201.
+1. **Given** admin is authenticated, **When** POST `/admin/docentes` with a `doc.*@unifranz.edu.bo` email and full name, **Then** a provisioning record is created (role=docente), returning 201. Email not matching `doc.*@unifranz.edu.bo` → 400.
+   - **Dev/test only**: If `APP_ENV=development` and `test_password` is provided in the request body, the account is created with a bcrypt-hashed password so the existing email/password login endpoint can be used for testing. In production (`APP_ENV=production`), `test_password` is silently ignored and the account has no password.
 2. **Given** docente accounts exist, **When** admin GET `/admin/docentes`, **Then** all docentes (active and inactive) are returned with pagination.
 3. **Given** a docente exists, **When** admin PUT `/admin/docentes/:id` with updated fields, **Then** the account is updated and 200 returned.
-4. **Given** an active docente, **When** admin DELETE `/admin/docentes/:id`, **Then** is_active=false; 204 returned; the docente cannot log in.
-5. **Given** a non-existent ID, **When** admin GET/PUT/DELETE `/admin/docentes/:id`, **Then** 404.
-6. **Given** a duplicate email, **When** admin POST `/admin/docentes`, **Then** 409 Conflict.
+4. **Given** an active docente, **When** admin DELETE `/admin/docentes/:id`, **Then** is_active=false; 204 returned; the docente's Google OAuth login is rejected.
+5. **Given** a deactivated docente, **When** admin PUT `/admin/docentes/:id` with `{"is_active": true}`, **Then** is_active=true; docente can log in via Google again. (Re-activation is reversible.)
+6. **Given** a non-existent ID, **When** admin GET/PUT/DELETE `/admin/docentes/:id`, **Then** 404.
+7. **Given** a duplicate email, **When** admin POST `/admin/docentes`, **Then** 409 Conflict.
+8. **Given** a provisioned docente, **When** the docente logs in via Google OAuth for the first time, **Then** the callback finds the provisioned record, creates/updates the user row, and issues JWT tokens.
 
 ---
 
@@ -79,6 +82,7 @@ An administrator can mark an actividad as interdisciplinary by attaching additio
 2. **Given** an interdisciplinary actividad, **When** detection runs RAG, **Then** curricular context is retrieved from ALL scopes (union, deduplicated by chunk_id).
 3. **Given** an interdisciplinary actividad, **When** admin DELETE `/actividades/:aid/interdisciplinary`, **Then** all extra scopes removed; 204 returned.
 4. **Given** non-admin user, **When** POST/DELETE interdisciplinary endpoints, **Then** 403.
+5. **Given** an actividad with scopes, **When** admin OR owning docente GET `/actividades/:aid/interdisciplinary`, **Then** scopes are returned. Non-owner docente or student → 403.
 
 ---
 
@@ -94,10 +98,10 @@ An administrator can mark an actividad as interdisciplinary by attaching additio
 
 ### Functional Requirements
 
-- **FR-001**: Admin MUST be able to create docente accounts (email, full name, temporary password) with role=docente.
+- **FR-001**: Admin MUST be able to pre-provision docente accounts (email + full name) with role=docente. Email MUST match `doc.*@unifranz.edu.bo`; any other format returns 400. In production, authentication is via Google OAuth only. When `APP_ENV=development`, an optional `test_password` field MAY be supplied to set a bcrypt-hashed password for testing via the email/password login endpoint.
 - **FR-002**: Admin MUST be able to list docente accounts with pagination and optional active/inactive filter.
 - **FR-003**: Admin MUST be able to update docente name and is_active status.
-- **FR-004**: Admin MUST be able to soft-deactivate docente accounts (is_active=false); no hard delete.
+- **FR-004**: Admin MUST be able to soft-deactivate docente accounts (is_active=false) via DELETE and re-activate them via PUT; no hard delete.
 - **FR-005**: Admin MUST be able to create named format rule templates (JSONB rules payload matching FormatRulesConfig schema).
 - **FR-006**: Admin MUST be able to list, update, and delete format templates (delete blocked if template is applied to any actividad).
 - **FR-007**: Docentes MUST be able to apply an existing format template to one of their actividades via a single call that copies rules into actividades.format_rules.
@@ -107,7 +111,7 @@ An administrator can mark an actividad as interdisciplinary by attaching additio
 - **FR-011**: Admin MUST be able to remove all interdisciplinary scopes from an actividad.
 - **FR-012**: Detection RAG MUST union-query all interdisciplinary scopes when present (deduplicated by chunk_id).
 - **FR-013**: All /admin/* endpoints MUST return 403 for non-admin roles.
-- **FR-014**: Format template apply endpoint MUST verify docente ownership of the actividad (403 otherwise).
+- **FR-014**: Format template apply and get-applied endpoints are restricted to the owning docente only (role=docente + actividad ownership check); co-docentes receive 403.
 
 ### Key Entities
 
@@ -133,4 +137,14 @@ An administrator can mark an actividad as interdisciplinary by attaching additio
 - Interdisciplinary scopes use a new table `actividad_interdisciplinary_scopes`.
 - Detection RAG union uses a separate SELECT per scope and deduplicates by chunk_id in Go before building the prompt.
 - Admin JWT claims are already handled by the auth package; no new auth plumbing needed.
-- Temporary docente passwords are bcrypt-hashed; plain-text is never stored.
+- Docente authentication is Google OAuth only — no password is stored or generated. The `password_hash` column in `users` is set to an empty placeholder for Google-authenticated accounts (consistent with how the existing `UpsertGoogleUser` function works).
+
+## Clarifications
+
+### Session 2026-05-23
+
+- Q: Can admin re-activate a previously deactivated docente account? → A: Yes — `PUT /admin/docentes/:id` with `{"is_active": true}` re-activates the account. Deactivation is reversible.
+- Q: Must docente email addresses follow the `@unifranz.edu.bo` domain rule? → A: Yes, and specifically must match the prefix pattern `doc.*@unifranz.edu.bo` (e.g., `doc.jdoe@unifranz.edu.bo`).
+- Q: Should co-docentes be allowed to apply format templates to the actividad they co-teach? → A: No — docente only. Co-docentes receive 403 on apply/get-applied endpoints.
+- Q: Who can call GET /actividades/:aid/interdisciplinary? → A: Admin and the owning docente. Non-owner docente and student receive 403.
+- Q: Should docente accounts use password-based login or Google OAuth? → A: Google OAuth only in production. Admin pre-provisions the email record; docente authenticates via Google. For local development/testing, an optional `test_password` field in `POST /admin/docentes` sets a bcrypt hash when `APP_ENV=development`, enabling email/password login for test accounts. The field is silently ignored in production.

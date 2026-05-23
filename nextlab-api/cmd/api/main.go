@@ -17,6 +17,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/Elder2003/nextlab-api/internal/academic"
+	"github.com/Elder2003/nextlab-api/internal/admin"
 	"github.com/Elder2003/nextlab-api/internal/ai"
 	"github.com/Elder2003/nextlab-api/internal/alerts"
 	"github.com/Elder2003/nextlab-api/internal/analytics"
@@ -154,6 +155,10 @@ func main() {
 	// Project Management (M10)
 	projectsModule := projects.NewModule(pgPool, minioClient, cfg.MinioBucket, aiSvc, cfg, alertsModule.Service())
 	projectsModule.RegisterRoutes(app, auth.AuthMiddleware(cfg), auth.RoleGuard)
+
+	// Admin Modules (M12)
+	adminModule := admin.NewModule(pgPool, minioClient, cfg.MinioBucket, cfg.AppEnv)
+	adminModule.RegisterRoutes(app, auth.AuthMiddleware(cfg), auth.RoleGuard)
 
 	slog.Info("server started",
 		slog.String("service", "api"),
