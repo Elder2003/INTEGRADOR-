@@ -5,6 +5,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
 
+	"github.com/Elder2003/nextlab-api/internal/alerts"
 	"github.com/Elder2003/nextlab-api/internal/config"
 )
 
@@ -17,9 +18,10 @@ func RegisterRoutes(
 	authMW fiber.Handler,
 	roleGuard func(roles ...string) fiber.Handler,
 	tracingSvc TracingService,
+	alertWriter alerts.AlertWriter,
 ) {
 	repo := &Repository{db: db}
-	svc := &Service{repo: repo, mc: mc, bucket: cfg.MinioBucket, tracingSvc: tracingSvc}
+	svc := &Service{repo: repo, mc: mc, bucket: cfg.MinioBucket, tracingSvc: tracingSvc, alertWriter: alertWriter}
 
 	// ─── Student — submission lifecycle ──────────────────────────────────────
 	student := app.Group("/actividades", authMW, roleGuard("estudiante"))

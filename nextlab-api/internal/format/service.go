@@ -8,16 +8,19 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
+
+	"github.com/Elder2003/nextlab-api/internal/alerts"
 )
 
 type FormatService struct {
-	repo   *Repository
-	minio  *minio.Client
-	bucket string
+	repo        *Repository
+	minio       *minio.Client
+	bucket      string
+	alertWriter alerts.AlertWriter
 }
 
-func NewFormatService(repo *Repository, minioClient *minio.Client, bucket string) *FormatService {
-	return &FormatService{repo: repo, minio: minioClient, bucket: bucket}
+func NewFormatService(repo *Repository, minioClient *minio.Client, bucket string, alertWriter alerts.AlertWriter) *FormatService {
+	return &FormatService{repo: repo, minio: minioClient, bucket: bucket, alertWriter: alertWriter}
 }
 
 // Run is called by the worker as phase 0 for a closed session.
@@ -105,5 +108,19 @@ func (s *FormatService) Run(ctx context.Context, sessionID uuid.UUID) error {
 		"parse_status", rep.ParseStatus,
 		"compliant", rep.Compliant,
 	)
+
+	if !rep.Compliant && s.alertWriter != nil {
+		docenteID, _ := s.repo.GetDocenteForActividad(ctx, actividadID)
+		aid := actividadID
+		_ = s.alertWriter.WriteAlert(ctx, alerts.Alert{
+			DocenteID:   docenteID,
+			ActividadID: &aid,
+			StudentID:   nil,
+			Type:        alerts.AlertFormatViolation,
+			Advisory:    true,
+			Payload:     map[string]any{"submission_id": submissionID, "compliant": false, "parse_status": rep.ParseStatus},
+		})
+	}
+
 	return nil
 }

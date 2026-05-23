@@ -9,16 +9,19 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
+
+	"github.com/Elder2003/nextlab-api/internal/alerts"
 )
 
 type InvestigacionService struct {
-	repo   *Repository
-	mc     *minio.Client
-	bucket string
+	repo        *Repository
+	mc          *minio.Client
+	bucket      string
+	alertWriter alerts.AlertWriter
 }
 
-func newInvestigacionService(repo *Repository, mc *minio.Client, bucket string) *InvestigacionService {
-	return &InvestigacionService{repo: repo, mc: mc, bucket: bucket}
+func newInvestigacionService(repo *Repository, mc *minio.Client, bucket string, alertWriter alerts.AlertWriter) *InvestigacionService {
+	return &InvestigacionService{repo: repo, mc: mc, bucket: bucket, alertWriter: alertWriter}
 }
 
 // CreateStage adds a stage to an investigacion actividad.
@@ -123,7 +126,35 @@ func (s *InvestigacionService) SubmitToStage(ctx context.Context, studentID, act
 		return nil, fmt.Errorf("store file: %w", err)
 	}
 
-	return s.repo.UpsertStageSubmission(ctx, stageID, studentID, fileKey, header.Filename, isLate)
+	sub, err := s.repo.UpsertStageSubmission(ctx, stageID, studentID, fileKey, header.Filename, isLate)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.alertWriter != nil {
+		docenteID, _ := s.repo.GetCursoDocente(ctx, cursoID)
+		aid := actividadID
+		sid := studentID
+		_ = s.alertWriter.WriteAlert(ctx, alerts.Alert{
+			DocenteID:   docenteID,
+			ActividadID: &aid,
+			StudentID:   &sid,
+			Type:        alerts.AlertSubmissionReceived,
+			Payload:     map[string]any{"stage_id": stageID, "filename": header.Filename},
+		})
+		if isLate {
+			_ = s.alertWriter.WriteAlert(ctx, alerts.Alert{
+				DocenteID:   docenteID,
+				ActividadID: &aid,
+				StudentID:   &sid,
+				Type:        alerts.AlertLateSubmission,
+				Advisory:    true,
+				Payload:     map[string]any{"stage_id": stageID, "filename": header.Filename},
+			})
+		}
+	}
+
+	return sub, nil
 }
 
 // GetStageProgress builds the per-student progress matrix for an actividad.

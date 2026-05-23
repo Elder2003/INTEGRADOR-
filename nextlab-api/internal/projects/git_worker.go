@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Elder2003/nextlab-api/internal/ai"
+	"github.com/Elder2003/nextlab-api/internal/alerts"
 	gogit "github.com/go-git/go-git/v5"
 	gogitcfg "github.com/go-git/go-git/v5/plumbing/transport/http"
 )
@@ -19,7 +20,7 @@ const cloneDepth = 200
 
 // ProcessGitAnalysisJob clones the repo, extracts commit stats, runs heuristics, and dispatches to the LLM.
 // Clone or extraction failures are stored as failed analysis records — the submission is never affected (FR-012, Principle VII).
-func ProcessGitAnalysisJob(ctx context.Context, job *GitAnalysisJob, repo *Repository, aiSvc *ai.Service) error {
+func ProcessGitAnalysisJob(ctx context.Context, job *GitAnalysisJob, repo *Repository, aiSvc *ai.Service, alertWriter alerts.AlertWriter) error {
 	slog.InfoContext(ctx, "processing git analysis job",
 		"job_id", job.ID, "git_analysis_id", job.GitAnalysisID, "repo_url", job.RepoURL)
 
@@ -61,6 +62,21 @@ func ProcessGitAnalysisJob(ctx context.Context, job *GitAnalysisJob, repo *Repos
 
 	slog.InfoContext(ctx, "git analysis complete",
 		"job_id", job.ID, "commit_count", stats.commitCount, "flags", stats.flags, "llm_status", llmStatus)
+
+	if alertWriter != nil && len(stats.flags) > 0 {
+		if _, cursoID, _, lookupErr := repo.GetActividadTipo(ctx, job.ActividadID); lookupErr == nil {
+			docenteID, _ := repo.GetCursoDocente(ctx, cursoID)
+			aid := job.ActividadID
+			_ = alertWriter.WriteAlert(ctx, alerts.Alert{
+				DocenteID:   docenteID,
+				ActividadID: &aid,
+				Type:        alerts.AlertGitAnalysisDone,
+				Advisory:    true,
+				Payload:     map[string]any{"flag_count": len(stats.flags), "flags": stats.flags, "git_analysis_id": job.GitAnalysisID},
+			})
+		}
+	}
+
 	return nil
 }
 

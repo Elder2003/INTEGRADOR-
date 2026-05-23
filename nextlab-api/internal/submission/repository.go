@@ -37,12 +37,12 @@ func (r *Repository) StudentEnrolledInActividad(ctx context.Context, studentID, 
 func (r *Repository) GetActividadInfo(ctx context.Context, actividadID uuid.UUID) (*ActividadInfo, error) {
 	a := &ActividadInfo{}
 	err := r.db.QueryRow(ctx, `
-		SELECT a.id, a.tipo, a.deadline, a.late_submission_allowed, a.has_submissions, c.is_active, a.trace_enabled
+		SELECT a.id, a.docente_id, a.tipo, a.deadline, a.late_submission_allowed, a.has_submissions, c.is_active, a.trace_enabled
 		FROM actividades a
 		JOIN cursos c ON c.id = a.curso_id
 		WHERE a.id = $1`,
 		actividadID).Scan(
-		&a.ID, &a.Tipo, &a.Deadline, &a.LateSubmissionAllowed, &a.HasSubmissions, &a.CursoIsActive, &a.TraceEnabled,
+		&a.ID, &a.DocenteID, &a.Tipo, &a.Deadline, &a.LateSubmissionAllowed, &a.HasSubmissions, &a.CursoIsActive, &a.TraceEnabled,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

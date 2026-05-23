@@ -13,6 +13,7 @@ import (
 	"github.com/minio/minio-go/v7"
 
 	"github.com/Elder2003/nextlab-api/internal/ai"
+	"github.com/Elder2003/nextlab-api/internal/alerts"
 	"github.com/Elder2003/nextlab-api/internal/config"
 	"github.com/Elder2003/nextlab-api/internal/rag"
 )
@@ -25,6 +26,7 @@ type DetectionService struct {
 	minio       *minio.Client
 	minioBucket string
 	cfg         *config.Config
+	alertWriter alerts.AlertWriter
 }
 
 func NewDetectionService(
@@ -35,6 +37,7 @@ func NewDetectionService(
 	minioClient *minio.Client,
 	minioBucket string,
 	cfg *config.Config,
+	alertWriter alerts.AlertWriter,
 ) *DetectionService {
 	return &DetectionService{
 		repo:        repo,
@@ -44,6 +47,7 @@ func NewDetectionService(
 		minio:       minioClient,
 		minioBucket: minioBucket,
 		cfg:         cfg,
+		alertWriter: alertWriter,
 	}
 }
 
@@ -75,6 +79,24 @@ func (s *DetectionService) RunHeuristic(ctx context.Context, sessionID uuid.UUID
 		"flagged", flagged,
 		"event_count", len(events),
 	)
+
+	if len(flagged) > 0 && s.alertWriter != nil {
+		actividadID, _, studentID, lookupErr := s.repo.GetSessionForDetection(ctx, sessionID)
+		if lookupErr == nil {
+			docenteID, _, _ := s.repo.GetDocenteScope(ctx, actividadID)
+			aid := actividadID
+			sid := studentID
+			_ = s.alertWriter.WriteAlert(ctx, alerts.Alert{
+				DocenteID:   docenteID,
+				ActividadID: &aid,
+				StudentID:   &sid,
+				Type:        alerts.AlertIntegrityFlag,
+				Advisory:    true,
+				Payload:     map[string]any{"session_id": sessionID, "score": score, "flagged": flagged},
+			})
+		}
+	}
+
 	return nil
 }
 

@@ -118,13 +118,14 @@ type ConfigChangesResponse struct {
 // ─── Internal types used by the service ──────────────────────────────────────
 
 type ActividadInfo struct {
-	ID                   uuid.UUID
-	Tipo                 string
-	Deadline             time.Time
+	ID                    uuid.UUID
+	DocenteID             uuid.UUID
+	Tipo                  string
+	Deadline              time.Time
 	LateSubmissionAllowed bool
-	HasSubmissions       bool
-	CursoIsActive        bool
-	TraceEnabled         bool
+	HasSubmissions        bool
+	CursoIsActive         bool
+	TraceEnabled          bool
 }
 
 // ─── Errors ───────────────────────────────────────────────────────────────────

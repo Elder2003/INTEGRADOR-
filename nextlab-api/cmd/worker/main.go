@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/Elder2003/nextlab-api/internal/ai"
+	"github.com/Elder2003/nextlab-api/internal/alerts"
 	"github.com/Elder2003/nextlab-api/internal/config"
 	"github.com/Elder2003/nextlab-api/internal/detection"
 	"github.com/Elder2003/nextlab-api/internal/format"
@@ -78,6 +79,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Alerts module (worker uses it for WriteAlert only — no HTTP routes needed)
+	alertsModule := alerts.NewModule(pgPool, rdb)
+
 	// Build detection dependencies
 	aiRepo := ai.NewRepository(pgPool)
 	aiSvc := ai.NewService(aiRepo, cfg)
@@ -90,8 +94,8 @@ func main() {
 	)
 	detectionRepo := detection.NewDetectionRepository(pgPool)
 	heuristicEngine := detection.NewHeuristicEngine(cfg)
-	detectionSvc := detection.NewDetectionService(detectionRepo, heuristicEngine, aiSvc, ragSvc, minioClient, cfg.MinioBucket, cfg)
-	fmtSvc := format.NewService(pgPool, minioClient, cfg.MinioBucket)
+	detectionSvc := detection.NewDetectionService(detectionRepo, heuristicEngine, aiSvc, ragSvc, minioClient, cfg.MinioBucket, cfg, alertsModule.Service())
+	fmtSvc := format.NewService(pgPool, minioClient, cfg.MinioBucket, alertsModule.Service())
 	workerHandler := detection.NewWorkerHandler(fmtSvc, detectionSvc)
 
 	repo := tracing.NewRepository(pgPool, rdb)
@@ -99,7 +103,7 @@ func main() {
 
 	// M10: Git analysis worker
 	projectsRepo := projects.NewRepository(pgPool)
-	go runGitAnalysisLoop(ctx, projectsRepo, aiSvc)
+	go runGitAnalysisLoop(ctx, projectsRepo, aiSvc, alertsModule.Service())
 
 	// Create consumer group (idempotent — ignore BUSYGROUP error)
 	_ = rdb.XGroupCreateMkStream(ctx, streamName, consumerGroup, "0").Err()
@@ -275,7 +279,7 @@ func sweepTimedOut(ctx context.Context, svc *tracing.Service) {
 }
 
 // runGitAnalysisLoop polls git_analysis_jobs every 10 seconds and processes any queued jobs.
-func runGitAnalysisLoop(ctx context.Context, repo *projects.Repository, aiSvc *ai.Service) {
+func runGitAnalysisLoop(ctx context.Context, repo *projects.Repository, aiSvc *ai.Service, alertWriter alerts.AlertWriter) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -292,7 +296,7 @@ func runGitAnalysisLoop(ctx context.Context, repo *projects.Repository, aiSvc *a
 				if job == nil {
 					break
 				}
-				if err := projects.ProcessGitAnalysisJob(ctx, job, repo, aiSvc); err != nil {
+				if err := projects.ProcessGitAnalysisJob(ctx, job, repo, aiSvc, alertWriter); err != nil {
 					slog.ErrorContext(ctx, "git analysis job failed", "job_id", job.ID, "err", err)
 					_ = repo.FailGitAnalysisJob(ctx, job.ID)
 				} else {

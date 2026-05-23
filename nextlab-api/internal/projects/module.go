@@ -2,6 +2,7 @@ package projects
 
 import (
 	"github.com/Elder2003/nextlab-api/internal/ai"
+	"github.com/Elder2003/nextlab-api/internal/alerts"
 	"github.com/Elder2003/nextlab-api/internal/config"
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,10 +17,10 @@ type Module struct {
 	repo          *Repository
 }
 
-func NewModule(db *pgxpool.Pool, mc *minio.Client, bucket string, aiSvc *ai.Service, _ *config.Config) *Module {
+func NewModule(db *pgxpool.Pool, mc *minio.Client, bucket string, aiSvc *ai.Service, _ *config.Config, alertWriter alerts.AlertWriter) *Module {
 	repo := NewRepository(db)
 	return &Module{
-		investigacion: newInvestigacionService(repo, mc, bucket),
+		investigacion: newInvestigacionService(repo, mc, bucket, alertWriter),
 		gitAnalysis:   newGitAnalysisService(repo, aiSvc),
 		defensa:       newDefensaService(repo),
 		repo:          repo,

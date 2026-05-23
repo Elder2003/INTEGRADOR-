@@ -18,6 +18,8 @@ import (
 
 	"github.com/Elder2003/nextlab-api/internal/academic"
 	"github.com/Elder2003/nextlab-api/internal/ai"
+	"github.com/Elder2003/nextlab-api/internal/alerts"
+	"github.com/Elder2003/nextlab-api/internal/analytics"
 	"github.com/Elder2003/nextlab-api/internal/auth"
 	"github.com/Elder2003/nextlab-api/internal/config"
 	"github.com/Elder2003/nextlab-api/internal/detection"
@@ -121,10 +123,16 @@ func main() {
 		return c.JSON(report)
 	})
 
+	// Alerts & Analytics (M11)
+	alertsModule := alerts.NewModule(pgPool, redisClient)
+	alertsModule.RegisterRoutes(app, auth.AuthMiddleware(cfg), auth.RoleGuard)
+	analyticsModule := analytics.NewModule(pgPool)
+	analyticsModule.RegisterRoutes(app, auth.AuthMiddleware(cfg), auth.RoleGuard)
+
 	auth.RegisterRoutes(app, pgPool, redisClient, cfg)
 	academic.RegisterRoutes(app, pgPool, redisClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
 	tracingSvc := tracing.RegisterRoutes(app, pgPool, redisClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
-	submission.RegisterRoutes(app, pgPool, minioClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard, tracingSvc)
+	submission.RegisterRoutes(app, pgPool, minioClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard, tracingSvc, alertsModule.Service())
 	ai.RegisterRoutes(app, pgPool, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
 	rag.RegisterRoutes(app, pgPool, minioClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
 
@@ -140,11 +148,11 @@ func main() {
 		embedClient,
 		cfg,
 	)
-	detectionSvc := detection.NewDetectionService(detectionRepo, heuristicEngine, aiSvc, ragSvc, minioClient, cfg.MinioBucket, cfg)
+	detectionSvc := detection.NewDetectionService(detectionRepo, heuristicEngine, aiSvc, ragSvc, minioClient, cfg.MinioBucket, cfg, alertsModule.Service())
 	detection.RegisterRoutes(app, detectionSvc, auth.AuthMiddleware(cfg), auth.RoleGuard)
 
 	// Project Management (M10)
-	projectsModule := projects.NewModule(pgPool, minioClient, cfg.MinioBucket, aiSvc, cfg)
+	projectsModule := projects.NewModule(pgPool, minioClient, cfg.MinioBucket, aiSvc, cfg, alertsModule.Service())
 	projectsModule.RegisterRoutes(app, auth.AuthMiddleware(cfg), auth.RoleGuard)
 
 	slog.Info("server started",

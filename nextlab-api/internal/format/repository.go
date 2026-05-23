@@ -97,6 +97,15 @@ func (r *Repository) GetFormatRulesForSession(ctx context.Context, sessionID uui
 	return &cfg, nil
 }
 
+// GetDocenteForActividad returns the owning docente_id for the given actividad.
+func (r *Repository) GetDocenteForActividad(ctx context.Context, actividadID uuid.UUID) (uuid.UUID, error) {
+	var docenteID uuid.UUID
+	err := r.db.QueryRow(ctx,
+		`SELECT docente_id FROM actividades WHERE id = $1`, actividadID,
+	).Scan(&docenteID)
+	return docenteID, err
+}
+
 func (r *Repository) scanReport(ctx context.Context, query string, arg any) (*FormatReport, error) {
 	var rep FormatReport
 	var subID *uuid.UUID
