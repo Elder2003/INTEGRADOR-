@@ -61,9 +61,9 @@ func RegisterRoutes(
 	cursos.Delete("/:id/actividades/:aid", DeleteActividadHandler(db))
 
 	// ─── Docente — co-teaching grants ─────────────────────────────────────────
-	docActiv := app.Group("/actividades", authMW, roleGuard("docente"))
-	docActiv.Post("/:aid/grants", CreateGrantHandler(db))
-	docActiv.Delete("/:aid/grants/:uid", RevokeGrantHandler(db))
+	docenteMW := []fiber.Handler{authMW, roleGuard("docente")}
+	app.Post("/actividades/:aid/grants", append(docenteMW, CreateGrantHandler(db))...)
+	app.Delete("/actividades/:aid/grants/:uid", append(docenteMW, RevokeGrantHandler(db))...)
 
 	// ─── Co-docente — activity view ───────────────────────────────────────────
 	grants := app.Group("/grants", authMW, roleGuard("co_docente"))

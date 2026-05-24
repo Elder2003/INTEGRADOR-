@@ -15,7 +15,7 @@ func errResp(c *fiber.Ctx, status int, code, message string) error {
 }
 
 func claimsDocenteID(c *fiber.Ctx) (uuid.UUID, error) {
-	raw := c.Locals("userID")
+	raw := c.Locals("user_id")
 	if raw == nil {
 		return uuid.Nil, fiber.ErrUnauthorized
 	}
@@ -41,11 +41,12 @@ func ActivityAnalyticsHandler(repo *Repository) fiber.Handler {
 			return errResp(c, fiber.StatusBadRequest, "invalid_id", "actividadId must be a UUID")
 		}
 
-		// Verify ownership and fetch tipo
+		// Verify ownership and fetch tipo (actividades.docente_id doesn't exist; join to cursos)
 		var ownerID uuid.UUID
 		var tipo string
 		dbErr := repo.db.QueryRow(c.Context(),
-			`SELECT docente_id, tipo FROM actividades WHERE id = $1`, actividadID,
+			`SELECT c.docente_id, a.tipo FROM actividades a JOIN cursos c ON c.id = a.curso_id WHERE a.id = $1`,
+			actividadID,
 		).Scan(&ownerID, &tipo)
 		if dbErr != nil {
 			return errResp(c, fiber.StatusNotFound, "not_found", "actividad not found")

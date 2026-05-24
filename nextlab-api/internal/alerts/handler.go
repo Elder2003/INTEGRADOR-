@@ -161,7 +161,7 @@ func writeSSEEvent(w *bufio.Writer, a Alert) {
 
 // claimsDocenteID extracts the authenticated user's UUID from Fiber locals set by JWT middleware.
 func claimsDocenteID(c *fiber.Ctx) (uuid.UUID, error) {
-	raw := c.Locals("userID")
+	raw := c.Locals("user_id")
 	if raw == nil {
 		return uuid.Nil, ErrForbidden
 	}

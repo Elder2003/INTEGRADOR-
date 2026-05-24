@@ -23,9 +23,9 @@ func RegisterRoutes(
 	svc := NewService(repo, rdb)
 
 	// ─── Student — session lifecycle ──────────────────────────────────────────
-	student := app.Group("/actividades", authMW, roleGuard("estudiante"))
-	student.Post("/:aid/session", openSessionHandler(svc))
-	student.Get("/:aid/session", getSessionHandler(svc))
+	studentMW := []fiber.Handler{authMW, roleGuard("estudiante")}
+	app.Post("/actividades/:aid/session", append(studentMW, openSessionHandler(svc))...)
+	app.Get("/actividades/:aid/session", append(studentMW, getSessionHandler(svc))...)
 
 	// ─── Student — WebSocket event stream ─────────────────────────────────────
 	// JWT validated via query param before upgrade (research.md Decision 2)

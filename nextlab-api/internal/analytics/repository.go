@@ -91,18 +91,20 @@ func (r *Repository) ActivityAnalyticsQuery(ctx context.Context, actividadID uui
 			return out, fmt.Errorf("defensa_oral analytics: %w", err)
 		}
 
-	default: // tarea, informe, examen, practica
+	default: // tarea, informe, examen, practica (grades live in grade_decisions via exam_sessions)
 		err := r.db.QueryRow(ctx, `
 			SELECT
-				COUNT(*)                                                                AS submission_count,
-				COUNT(*) FILTER (WHERE is_late = true)                                 AS late_count,
-				COUNT(*) FILTER (WHERE grade BETWEEN 0  AND 49)                       AS r0,
-				COUNT(*) FILTER (WHERE grade BETWEEN 50 AND 69)                       AS r50,
-				COUNT(*) FILTER (WHERE grade BETWEEN 70 AND 89)                       AS r70,
-				COUNT(*) FILTER (WHERE grade BETWEEN 90 AND 100)                      AS r90,
-				AVG(grade)                                                             AS avg_grade
-			FROM submissions
-			WHERE actividad_id = $1`,
+				COUNT(sub.id)                                                              AS submission_count,
+				COUNT(sub.id) FILTER (WHERE sub.is_late = true)                           AS late_count,
+				COUNT(*) FILTER (WHERE gd.final_grade BETWEEN 0  AND 49)                 AS r0,
+				COUNT(*) FILTER (WHERE gd.final_grade BETWEEN 50 AND 69)                 AS r50,
+				COUNT(*) FILTER (WHERE gd.final_grade BETWEEN 70 AND 89)                 AS r70,
+				COUNT(*) FILTER (WHERE gd.final_grade BETWEEN 90 AND 100)                AS r90,
+				AVG(gd.final_grade)                                                        AS avg_grade
+			FROM submissions sub
+			LEFT JOIN exam_sessions es ON es.actividad_id = sub.actividad_id AND es.student_id = sub.student_id
+			LEFT JOIN grade_decisions gd ON gd.session_id = es.id
+			WHERE sub.actividad_id = $1`,
 			actividadID,
 		).Scan(&out.SubmissionCount, &out.LateCount,
 			&out.GradeDistribution.Range0_49, &out.GradeDistribution.Range50_69,
@@ -133,8 +135,8 @@ func (r *Repository) CourseAnalyticsQuery(ctx context.Context, cursoID uuid.UUID
 	out := CourseAnalytics{CursoID: cursoID}
 
 	rows, err := r.db.Query(ctx,
-		`SELECT id, tipo FROM actividades WHERE curso_id = $1 AND docente_id = $2 ORDER BY created_at`,
-		cursoID, docenteID,
+		`SELECT id, tipo FROM actividades WHERE curso_id = $1 ORDER BY created_at`,
+		cursoID,
 	)
 	if err != nil {
 		return out, fmt.Errorf("list actividades: %w", err)
@@ -172,23 +174,25 @@ func (r *Repository) CourseAnalyticsQuery(ctx context.Context, cursoID uuid.UUID
 	var avg *float64
 	_ = r.db.QueryRow(ctx, `
 		SELECT AVG(g) FROM (
-			SELECT grade AS g FROM submissions    WHERE actividad_id = ANY(
-				SELECT id FROM actividades WHERE curso_id = $1 AND docente_id = $2
-			) AND grade IS NOT NULL
+			SELECT gd.final_grade AS g
+			FROM grade_decisions gd
+			JOIN exam_sessions es ON es.id = gd.session_id
+			JOIN actividades a ON a.id = es.actividad_id
+			WHERE a.curso_id = $1
 			UNION ALL
 			SELECT ss.grade FROM stage_submissions ss
 			JOIN investigacion_stages s ON ss.stage_id = s.id
 			JOIN actividades a ON s.actividad_id = a.id
-			WHERE a.curso_id = $1 AND a.docente_id = $2 AND ss.grade IS NOT NULL
+			WHERE a.curso_id = $1 AND ss.grade IS NOT NULL
 			UNION ALL
 			SELECT ga.grade FROM git_analyses ga
 			JOIN actividades a ON ga.actividad_id = a.id
-			WHERE a.curso_id = $1 AND a.docente_id = $2 AND ga.grade IS NOT NULL
+			WHERE a.curso_id = $1 AND ga.grade IS NOT NULL
 			UNION ALL
 			SELECT da.grade FROM defense_appointments da
 			JOIN actividades a ON da.actividad_id = a.id
-			WHERE a.curso_id = $1 AND a.docente_id = $2 AND da.grade IS NOT NULL
-		) grades`, cursoID, docenteID,
+			WHERE a.curso_id = $1 AND da.grade IS NOT NULL
+		) grades`, cursoID,
 	).Scan(&avg)
 	out.AvgGrade = avg
 
