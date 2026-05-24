@@ -56,3 +56,12 @@ type GradeRequest struct {
 	FinalGrade     float64 `json:"final_grade"`
 	OverrideReason string  `json:"override_reason,omitempty"`
 }
+
+type GradeLogResult struct {
+	SessionID           uuid.UUID  `json:"session_id"`
+	FinalGrade          float64    `json:"final_grade"`
+	SuggestedGradeRange string     `json:"suggested_grade_range"`
+	OverrideReason      *string    `json:"override_reason,omitempty"`
+	DecidedBy           uuid.UUID  `json:"decided_by"`
+	DecidedAt           time.Time  `json:"decided_at"`
+}

@@ -18,6 +18,7 @@ import (
 
 	"github.com/Elder2003/nextlab-api/internal/academic"
 	"github.com/Elder2003/nextlab-api/internal/admin"
+	"github.com/Elder2003/nextlab-api/internal/appeals"
 	"github.com/Elder2003/nextlab-api/internal/ai"
 	"github.com/Elder2003/nextlab-api/internal/alerts"
 	"github.com/Elder2003/nextlab-api/internal/analytics"
@@ -159,6 +160,10 @@ func main() {
 	// Admin Modules (M12)
 	adminModule := admin.NewModule(pgPool, minioClient, cfg.MinioBucket, cfg.AppEnv)
 	adminModule.RegisterRoutes(app, auth.AuthMiddleware(cfg), auth.RoleGuard)
+
+	// Appeals & Final Audit (M13)
+	appealsModule := appeals.NewModule(pgPool)
+	appealsModule.RegisterRoutes(app, auth.AuthMiddleware(cfg), auth.RoleGuard)
 
 	slog.Info("server started",
 		slog.String("service", "api"),

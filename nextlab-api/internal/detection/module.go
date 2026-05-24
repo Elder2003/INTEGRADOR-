@@ -53,4 +53,5 @@ func RegisterRoutes(
 
 	sessions.Get("/detection-report", h.report)
 	sessions.Post("/grade", h.grade)
+	sessions.Get("/grade-log", h.gradeLog)
 }

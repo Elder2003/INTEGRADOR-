@@ -77,6 +77,50 @@ func (h *detectionHandler) grade(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusCreated).JSON(result)
 }
 
+func (h *detectionHandler) gradeLog(c *fiber.Ctx) error {
+	sessionID, err := uuid.Parse(c.Params("sessionID"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid session_id"})
+	}
+
+	callerID, ok := userIDFromLocals(c)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+	}
+
+	role, _ := c.Locals("user_role").(string)
+	if role != "admin" {
+		owns, err := h.svc.repo.VerifyDocenteOwnsSession(c.Context(), sessionID, callerID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal_error"})
+		}
+		if !owns {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
+		}
+	}
+
+	g, err := h.svc.repo.GetGradeDecision(c.Context(), sessionID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal_error"})
+	}
+	if g == nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not_found"})
+	}
+
+	result := GradeLogResult{
+		SessionID:           sessionID,
+		FinalGrade:          g.FinalGrade,
+		SuggestedGradeRange: g.SuggestedGradeRange,
+		DecidedBy:           g.DecidedBy,
+		DecidedAt:           g.DecidedAt,
+	}
+	if g.OverrideReason != "" {
+		result.OverrideReason = &g.OverrideReason
+	}
+
+	return c.Status(fiber.StatusOK).JSON(result)
+}
+
 func userIDFromLocals(c *fiber.Ctx) (uuid.UUID, bool) {
 	raw := c.Locals("user_id")
 	str, ok := raw.(string)
