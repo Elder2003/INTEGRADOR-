@@ -9,8 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	embeddedmigrations "github.com/Elder2003/nextlab-api/migrations"
 )
 
 var db *pgxpool.Pool
@@ -33,6 +38,22 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	db = pool
+
+	// Run migrations so all tables exist
+	d, err := iofs.New(embeddedmigrations.FS, ".")
+	if err != nil {
+		fmt.Printf("load migrations: %v\n", err)
+		os.Exit(1)
+	}
+	mg, err := migrate.NewWithSourceInstance("iofs", d, dsn)
+	if err != nil {
+		fmt.Printf("init migrate: %v\n", err)
+		os.Exit(1)
+	}
+	if err := mg.Up(); err != nil && err != migrate.ErrNoChange {
+		fmt.Printf("run migrations: %v\n", err)
+		os.Exit(1)
+	}
 
 	truncate(ctx)
 

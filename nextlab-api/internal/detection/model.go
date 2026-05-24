@@ -45,11 +45,11 @@ type DetectionReport struct {
 }
 
 type GradeDecisionResult struct {
-	FinalGrade           float64   `json:"final_grade"`
-	SuggestedGradeRange  string    `json:"suggested_grade_range,omitempty"`
-	OverrideReason       string    `json:"override_reason,omitempty"`
-	DecidedBy            uuid.UUID `json:"decided_by"`
-	DecidedAt            time.Time `json:"decided_at"`
+	FinalGrade          float64   `json:"final_grade"`
+	SuggestedGradeRange *string   `json:"suggested_grade_range,omitempty"`
+	OverrideReason      *string   `json:"override_reason,omitempty"`
+	DecidedBy           uuid.UUID `json:"decided_by"`
+	DecidedAt           time.Time `json:"decided_at"`
 }
 
 type GradeRequest struct {

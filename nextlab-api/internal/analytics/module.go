@@ -14,7 +14,7 @@ func NewModule(db *pgxpool.Pool) *Module {
 }
 
 func (m *Module) RegisterRoutes(app *fiber.App, jwtMiddleware fiber.Handler, roleGuard func(roles ...string) fiber.Handler) {
-	docente := app.Group("", jwtMiddleware, roleGuard("docente", "co_docente"))
-	docente.Get("/actividades/:actividadId/analytics", ActivityAnalyticsHandler(m.repo))
-	docente.Get("/cursos/:cursoId/analytics", CourseAnalyticsHandler(m.repo))
+	mw := []fiber.Handler{jwtMiddleware, roleGuard("docente", "co_docente")}
+	app.Get("/actividades/:actividadId/analytics", append(mw, ActivityAnalyticsHandler(m.repo))...)
+	app.Get("/cursos/:cursoId/analytics", append(mw, CourseAnalyticsHandler(m.repo))...)
 }

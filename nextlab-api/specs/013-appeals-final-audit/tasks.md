@@ -92,7 +92,7 @@
 
 - [X] T018 Register appeals module in `cmd/api/main.go`: add import `"github.com/Elder2003/nextlab-api/internal/appeals"`; after adminModule registration: `appealsModule := appeals.NewModule(pgPool)`; `appealsModule.RegisterRoutes(app, auth.AuthMiddleware(cfg), auth.RoleGuard)`
 - [X] T019 Run `go build ./...` and `go vet ./...` from repo root; fix any compile errors or vet warnings
-- [ ] T020 Run quickstart scenarios from `specs/013-appeals-final-audit/quickstart.md` against live stack; document any gaps
+- [X] T020 Run quickstart scenarios from `specs/013-appeals-final-audit/quickstart.md` against live stack; document any gaps
 
 ---
 

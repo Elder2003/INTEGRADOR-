@@ -107,15 +107,17 @@ func (h *detectionHandler) gradeLog(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "not_found"})
 	}
 
+	var suggested string
+	if g.SuggestedGradeRange != nil {
+		suggested = *g.SuggestedGradeRange
+	}
 	result := GradeLogResult{
 		SessionID:           sessionID,
 		FinalGrade:          g.FinalGrade,
-		SuggestedGradeRange: g.SuggestedGradeRange,
+		SuggestedGradeRange: suggested,
+		OverrideReason:      g.OverrideReason,
 		DecidedBy:           g.DecidedBy,
 		DecidedAt:           g.DecidedAt,
-	}
-	if g.OverrideReason != "" {
-		result.OverrideReason = &g.OverrideReason
 	}
 
 	return c.Status(fiber.StatusOK).JSON(result)
