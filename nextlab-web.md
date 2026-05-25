@@ -207,105 +207,196 @@ src/
 
 ---
 
-## Implementation Phases
+## Architecture Rule — Thin Client
 
-### Phase 1 — Foundation
-**Goal:** Running app shell, auth flow, axios client, route skeleton.
+> **The frontend has zero business logic. Everything computes in the backend.**
 
-- [ ] `src/index.css` — CSS variables + Tailwind base
-- [ ] `src/lib/api.ts` — axios instance, baseURL from `VITE_API_URL`, JWT interceptor
+The frontend is a display and input layer only. It renders what the API returns and
+sends user input to the API. It does not:
+
+- Calculate or derive grades
+- Enforce deadlines or block uploads based on time
+- Validate file contents or enforce size limits
+- Compute integrity scores, risk levels, or similarity
+- Manage activity state transitions
+- Check data-level permissions beyond role routing
+
+If a view needs different data, add a backend endpoint. Do not transform API responses
+in components.
+
+---
+
+## Milestones
+
+Each milestone aligns to one or more backend milestones and ends with a React Doctor
+scan. A milestone is **done** when its deliverable works against the live API.
+
+---
+
+### MW1 — Foundation & Auth
+**Backend:** M1  
+**Goal:** Running shell, JWT auth flow, role-based redirect.
+
+- [ ] `.env` — `VITE_API_URL=http://localhost:8080`
+- [ ] `src/index.css` — `@import "tailwindcss"` + CSS variables (Unifranz palette)
+- [ ] `src/lib/api.ts` — axios instance, JWT interceptor (auto-refresh on 401)
 - [ ] `src/lib/auth.ts` — `getAccessToken`, `setTokens`, `clearTokens`
-- [ ] `src/context/AuthContext.tsx` — user state, login/logout functions
-- [ ] `src/api/auth.ts` — login, register, refresh, logout API calls
-- [ ] `src/components/common/` — Layout, Topbar, Sidebar, ProtectedRoute, Spinner
-- [ ] `src/router/index.tsx` — all routes with ProtectedRoute guards
+- [ ] `src/api/auth.ts` — login, register, refresh, logout
+- [ ] `src/context/AuthContext.tsx` — user + role state, login/logout actions
+- [ ] `src/components/common/` — Layout, Topbar, Sidebar, ProtectedRoute, Spinner, ErrorMessage
+- [ ] `src/router/index.tsx` — all routes, ProtectedRoute guards per role
 - [ ] `src/pages/auth/LoginPage.tsx`
 - [ ] `src/pages/auth/RegisterPage.tsx`
 - [ ] `src/App.tsx` + `src/main.tsx`
-- [ ] `.env` — `VITE_API_URL=http://localhost:8080`
+- [ ] React Doctor scan — no ERRORs
 
-**Done when:** Login → JWT stored → redirect to role dashboard → logout → back to /login.
-
----
-
-### Phase 2 — Student Surface
-**Goal:** Full student workflow: browse activities, upload submission, live session, grades, appeal.
-
-- [ ] `src/api/academic.ts` — student endpoints (me/cursos, me/cursos/:id/actividades)
-- [ ] `src/api/submissions.ts` — upload, replace, delete, download
-- [ ] `src/api/tracing.ts` — open session, WebSocket connect
-- [ ] `src/api/appeals.ts` — create appeal
-- [ ] `src/types/index.ts` — TS interfaces for all API response shapes
-- [ ] `src/components/student/` — all 7 student components
-- [ ] `src/pages/student/DashboardPage.tsx`
-- [ ] `src/pages/student/ActividadesPage.tsx`
-- [ ] `src/pages/student/ActividadPage.tsx` (file upload + timer + tracing)
-- [ ] `src/pages/student/GradesPage.tsx`
-- [ ] `src/pages/student/AppealPage.tsx`
-
-**Done when:** Student can log in, see their courses, open an activity, upload a file, see the tracing panel update via WebSocket, and submit an appeal.
+**Done when:** Login → JWT in memory → role redirect → logout → /login.
 
 ---
 
-### Phase 3 — Docente Core
-**Goal:** Course/activity management and submission review.
+### MW2 — Docente: Course Management
+**Backend:** M2, M3  
+**Goal:** Docente can manage courses, groups, students, and activities.
 
-- [ ] `src/api/academic.ts` — docente endpoints (cursos CRUD, actividades CRUD, grupos, grants)
-- [ ] `src/components/docente/SubmissionTable.tsx`
-- [ ] `src/components/docente/TraceViewer.tsx`
-- [ ] `src/pages/docente/DashboardPage.tsx`
-- [ ] `src/pages/docente/CursoDetailPage.tsx` (with tabs)
-- [ ] `src/pages/docente/CreateActividadPage.tsx`
-- [ ] `src/pages/docente/ActividadDetailPage.tsx`
-- [ ] `src/pages/docente/SubmissionsPage.tsx`
-- [ ] `src/pages/docente/SubmissionDetailPage.tsx` (trace timeline + basic info)
+- [ ] `src/api/academic.ts` — cursos CRUD, actividades CRUD, grupos CRUD, grants, students roster
+- [ ] `src/types/index.ts` — TS interfaces for all API shapes (add to as milestones progress)
+- [ ] `src/pages/docente/DashboardPage.tsx` — list of my courses
+- [ ] `src/pages/docente/CursoDetailPage.tsx` — tabs: actividades | students | groups
+- [ ] `src/pages/docente/CreateActividadPage.tsx` — form → POST /cursos/:id/actividades
+- [ ] `src/pages/docente/ActividadDetailPage.tsx` — activity info + config
+- [ ] `src/components/common/ConfirmModal.tsx`
+- [ ] React Doctor scan — no ERRORs
 
-**Done when:** Docente can create a course, add an activity, see student submission list, and view a submission's trace.
-
----
-
-### Phase 4 — Grading
-**Goal:** Exam sessions, grade decisions, investigación stages, defensa oral.
-
-- [ ] `src/api/tracing.ts` — grade decision endpoints (exam sessions)
-- [ ] `src/api/projects.ts` — investigación stages + stage submissions
-- [ ] `src/api/git.ts` — git submissions + analyses
-- [ ] `src/components/docente/GradePanel.tsx`
-- [ ] Grade form in `SubmissionDetailPage.tsx` (tarea/examen/informe/practica)
-- [ ] Investigación stage grading sub-page
-- [ ] Defensa oral scheduling + grading sub-page
-
-**Done when:** Docente can assign a final grade to a submission and it appears in the student's grades view.
+**Done when:** Docente creates a course, adds a student, creates an activity.
 
 ---
 
-### Phase 5 — Analytics + Alerts
-**Goal:** Visual analytics and alerts management.
+### MW3 — Admin Panel
+**Backend:** M3  
+**Goal:** Admin manages catalog: carreras, materias, student profiles.
 
-- [ ] `src/api/analytics.ts` — activity analytics, course analytics
-- [ ] `src/api/alerts.ts` — list + dismiss alerts
-- [ ] `src/components/docente/AnalyticsBar.tsx` — CSS-only bar chart (no chart lib)
-- [ ] `src/components/docente/AlertsTable.tsx`
-- [ ] `src/pages/docente/ActivityAnalyticsPage.tsx`
-- [ ] `src/pages/docente/CourseAnalyticsPage.tsx`
-- [ ] Alerts section in `ActividadDetailPage.tsx`
-
-**Done when:** Docente can see grade distribution bars and pending/flagged counts per activity.
-
----
-
-### Phase 6 — Admin + Co-docente
-**Goal:** Admin CRUD surfaces and co-docente granted access.
-
-- [ ] `src/api/admin.ts` — carreras, materias, student-profiles
+- [ ] `src/api/admin.ts` — carreras CRUD, materias CRUD, student-profiles CRUD
+- [ ] `src/pages/admin/DashboardPage.tsx`
 - [ ] `src/pages/admin/CarrerasPage.tsx`
 - [ ] `src/pages/admin/MateriasPage.tsx`
 - [ ] `src/pages/admin/StudentProfilesPage.tsx`
-- [ ] `src/pages/codocente/ActividadViewPage.tsx`
-- [ ] `src/pages/codocente/SubmissionsPage.tsx`
-- [ ] Sidebar nav differentiation for co_docente role
+- [ ] React Doctor scan — no ERRORs
 
-**Done when:** Admin can manage catalog data; co_docente can view submissions on granted activities.
+**Done when:** Admin creates a carrera, links a materia, creates a student profile.
+
+---
+
+### MW4 — Student Portal
+**Backend:** M2, M3  
+**Goal:** Student views their assigned courses and activities.
+
+- [ ] `src/api/academic.ts` — student endpoints: GET /me/cursos, GET /me/cursos/:id/actividades
+- [ ] `src/components/student/ActivityCard.tsx`
+- [ ] `src/components/student/ActivityTypeBadge.tsx`
+- [ ] `src/pages/student/DashboardPage.tsx` — my courses
+- [ ] `src/pages/student/ActividadesPage.tsx` — activities for a course
+- [ ] `src/pages/student/ActividadPage.tsx` — activity detail (read + submit area placeholder)
+- [ ] React Doctor scan — no ERRORs
+
+**Done when:** Student logs in, sees their courses, opens an activity detail page.
+
+---
+
+### MW5 — File Submissions
+**Backend:** M4  
+**Goal:** Student uploads files; docente sees and downloads them.
+
+- [ ] `src/api/submissions.ts` — upload, replace, delete, download, list
+- [ ] `src/components/student/FileUpload.tsx` — drag-and-drop, sends to API
+- [ ] `src/components/student/IntegrityDeclaration.tsx` — checkbox before upload
+- [ ] `src/components/docente/SubmissionTable.tsx` — paginated list
+- [ ] `src/pages/student/ActividadPage.tsx` — wire FileUpload + current submission display
+- [ ] `src/pages/docente/SubmissionsPage.tsx` — GET /cursos/:cid/actividades/:aid/submissions
+- [ ] `src/pages/docente/SubmissionDetailPage.tsx` — submission metadata + download
+- [ ] Co-docente submission view — `src/pages/codocente/SubmissionsPage.tsx`
+- [ ] React Doctor scan — no ERRORs
+
+**Done when:** Student uploads a file; docente downloads it from the submissions list.
+
+---
+
+### MW6 — Session Tracing
+**Backend:** M5  
+**Goal:** Student opens a session; docente reads the trace.
+
+- [ ] `src/api/tracing.ts` — open session, get session
+- [ ] `src/components/student/TracingPanel.tsx` — WebSocket connect, display incoming events
+- [ ] `src/components/docente/TraceViewer.tsx` — read-only timeline of trace events
+- [ ] `src/pages/student/ActividadPage.tsx` — wire TracingPanel on session open
+- [ ] `src/pages/docente/SubmissionDetailPage.tsx` — add TraceViewer + verify-hash button
+- [ ] React Doctor scan — no ERRORs
+
+**Done when:** Student opens session, events appear in TracingPanel; docente sees full timeline.
+
+---
+
+### MW7 — Grading
+**Backend:** M5, M11  
+**Goal:** Docente grades submissions; student sees grades.
+
+- [ ] `src/api/tracing.ts` — exam sessions + grade decisions
+- [ ] `src/api/projects.ts` — investigación stages, stage submissions
+- [ ] `src/components/docente/GradePanel.tsx` — grade form, sends to API, displays API response
+- [ ] `src/pages/docente/SubmissionDetailPage.tsx` — wire GradePanel (tarea/examen/informe/practica)
+- [ ] `src/pages/docente/InvestigacionPage.tsx` — stage list + stage grade form
+- [ ] `src/pages/docente/DefensaPage.tsx` — schedule + grade oral defense
+- [ ] `src/pages/student/GradesPage.tsx` — display grades returned by API
+- [ ] React Doctor scan — no ERRORs
+
+**Done when:** Docente submits a grade; student sees it on the grades page.
+
+---
+
+### MW8 — Git & AI Results
+**Backend:** M6, M7, M8  
+**Goal:** Student submits a git repo; docente reads analysis and detection reports.
+
+- [ ] `src/api/git.ts` — git submission form, GET git analysis
+- [ ] `src/api/ai.ts` — GET AI analysis result
+- [ ] `src/api/detection.ts` — GET detection report
+- [ ] `src/pages/student/ActividadPage.tsx` — git URL input form (tipo === git_analysis)
+- [ ] `src/pages/docente/SubmissionDetailPage.tsx` — display git analysis + AI result + detection report (all read-only)
+- [ ] `src/components/student/RiskBadge.tsx` — display flag returned by API
+- [ ] React Doctor scan — no ERRORs
+
+**Done when:** Docente opens a git_analysis submission and reads the AI and detection reports.
+
+---
+
+### MW9 — Alerts & Analytics
+**Backend:** M9, M10, M12  
+**Goal:** Docente sees alerts and grade analytics.
+
+- [ ] `src/api/alerts.ts` — list alerts, dismiss
+- [ ] `src/api/analytics.ts` — activity analytics, course analytics
+- [ ] `src/components/docente/AlertsTable.tsx`
+- [ ] `src/components/docente/AnalyticsBar.tsx` — CSS-only bar chart (no chart library)
+- [ ] `src/pages/docente/ActividadDetailPage.tsx` — add alerts section
+- [ ] `src/pages/docente/ActivityAnalyticsPage.tsx`
+- [ ] `src/pages/docente/CourseAnalyticsPage.tsx`
+- [ ] `src/pages/docente/CursoDetailPage.tsx` — add analytics tab
+- [ ] React Doctor scan — no ERRORs
+
+**Done when:** Docente sees grade distribution bars and the flagged-submissions count.
+
+---
+
+### MW10 — Appeals
+**Backend:** M13  
+**Goal:** Student files an appeal; docente resolves it.
+
+- [ ] `src/api/appeals.ts` — create appeal, list appeals, resolve appeal
+- [ ] `src/pages/student/AppealPage.tsx` — appeal form → POST /actividades/:aid/appeals
+- [ ] `src/pages/docente/AppealsPage.tsx` — list appeals for my activities + resolve action
+- [ ] `src/components/docente/AppealCard.tsx`
+- [ ] React Doctor scan — no ERRORs
+
+**Done when:** Student submits an appeal; docente sees it and marks it resolved.
 
 ---
 
