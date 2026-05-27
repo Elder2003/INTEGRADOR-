@@ -17,10 +17,16 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/Elder2003/nextlab-api/internal/academic"
+	"github.com/Elder2003/nextlab-api/internal/admin"
+	"github.com/Elder2003/nextlab-api/internal/appeals"
 	"github.com/Elder2003/nextlab-api/internal/ai"
+	"github.com/Elder2003/nextlab-api/internal/alerts"
+	"github.com/Elder2003/nextlab-api/internal/analytics"
 	"github.com/Elder2003/nextlab-api/internal/auth"
 	"github.com/Elder2003/nextlab-api/internal/config"
+	"github.com/Elder2003/nextlab-api/internal/detection"
 	"github.com/Elder2003/nextlab-api/internal/health"
+	"github.com/Elder2003/nextlab-api/internal/projects"
 	"github.com/Elder2003/nextlab-api/internal/rag"
 	"github.com/Elder2003/nextlab-api/internal/submission"
 	"github.com/Elder2003/nextlab-api/internal/tracing"
@@ -119,12 +125,45 @@ func main() {
 		return c.JSON(report)
 	})
 
+	// Alerts & Analytics (M11)
+	alertsModule := alerts.NewModule(pgPool, redisClient)
+	alertsModule.RegisterRoutes(app, auth.AuthMiddleware(cfg), auth.RoleGuard)
+	analyticsModule := analytics.NewModule(pgPool)
+	analyticsModule.RegisterRoutes(app, auth.AuthMiddleware(cfg), auth.RoleGuard)
+
 	auth.RegisterRoutes(app, pgPool, redisClient, cfg)
 	academic.RegisterRoutes(app, pgPool, redisClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
 	tracingSvc := tracing.RegisterRoutes(app, pgPool, redisClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
-	submission.RegisterRoutes(app, pgPool, minioClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard, tracingSvc)
+	submission.RegisterRoutes(app, pgPool, minioClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard, tracingSvc, alertsModule.Service())
 	ai.RegisterRoutes(app, pgPool, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
 	rag.RegisterRoutes(app, pgPool, minioClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
+
+	// Detection Engine (M8) — builds shared AI dependencies
+	detectionRepo := detection.NewDetectionRepository(pgPool)
+	heuristicEngine := detection.NewHeuristicEngine(cfg)
+	aiRepo := ai.NewRepository(pgPool)
+	aiSvc := ai.NewService(aiRepo, cfg)
+	embedClient := rag.NewEmbedClient(cfg)
+	ragSvc := rag.NewRetrieveService(
+		rag.NewCurricularRepository(pgPool),
+		rag.NewDocenteRepository(pgPool),
+		embedClient,
+		cfg,
+	)
+	detectionSvc := detection.NewDetectionService(detectionRepo, heuristicEngine, aiSvc, ragSvc, minioClient, cfg.MinioBucket, cfg, alertsModule.Service())
+	detection.RegisterRoutes(app, detectionSvc, auth.AuthMiddleware(cfg), auth.RoleGuard)
+
+	// Project Management (M10)
+	projectsModule := projects.NewModule(pgPool, minioClient, cfg.MinioBucket, aiSvc, cfg, alertsModule.Service())
+	projectsModule.RegisterRoutes(app, auth.AuthMiddleware(cfg), auth.RoleGuard)
+
+	// Admin Modules (M12)
+	adminModule := admin.NewModule(pgPool, minioClient, cfg.MinioBucket, cfg.AppEnv)
+	adminModule.RegisterRoutes(app, auth.AuthMiddleware(cfg), auth.RoleGuard)
+
+	// Appeals & Final Audit (M13)
+	appealsModule := appeals.NewModule(pgPool)
+	appealsModule.RegisterRoutes(app, auth.AuthMiddleware(cfg), auth.RoleGuard)
 
 	slog.Info("server started",
 		slog.String("service", "api"),

@@ -1,5 +1,5 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-`specs/007-dual-rag/plan.md`
+`specs/013-appeals-final-audit/plan.md`
 <!-- SPECKIT END -->

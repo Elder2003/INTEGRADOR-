@@ -12,12 +12,15 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/minio/minio-go/v7"
+
+	"github.com/Elder2003/nextlab-api/internal/alerts"
 )
 
 // TracingService is implemented by *tracing.Service; defined here to avoid import cycles.
 type TracingService interface {
 	CloseSessionWithSubmission(ctx context.Context, studentID, actividadID, submissionID uuid.UUID)
 }
+
 
 const maxFileSizeBytes = 52_428_800 // 50 MB
 
@@ -40,10 +43,11 @@ var validTipos = map[string]bool{
 
 // Service handles all submission business logic.
 type Service struct {
-	repo       *Repository
-	mc         *minio.Client
-	bucket     string
-	tracingSvc TracingService
+	repo        *Repository
+	mc          *minio.Client
+	bucket      string
+	tracingSvc  TracingService
+	alertWriter alerts.AlertWriter
 }
 
 // StreamResult carries an open MinIO object reader plus metadata for download handlers.
@@ -148,6 +152,18 @@ func (s *Service) UploadFile(ctx context.Context, studentID, actividadID uuid.UU
 
 	if act.TraceEnabled && s.tracingSvc != nil {
 		s.tracingSvc.CloseSessionWithSubmission(ctx, studentID, actividadID, sub.ID)
+	}
+
+	if s.alertWriter != nil {
+		aid := actividadID
+		sid := studentID
+		_ = s.alertWriter.WriteAlert(ctx, alerts.Alert{
+			DocenteID:   act.DocenteID,
+			ActividadID: &aid,
+			StudentID:   &sid,
+			Type:        alerts.AlertSubmissionReceived,
+			Payload:     map[string]any{"submission_id": sub.ID, "filename": header.Filename, "submitted_at": now},
+		})
 	}
 
 	resp := toResponse(sub)

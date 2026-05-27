@@ -5,6 +5,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
 
+	"github.com/Elder2003/nextlab-api/internal/alerts"
 	"github.com/Elder2003/nextlab-api/internal/config"
 )
 
@@ -17,17 +18,18 @@ func RegisterRoutes(
 	authMW fiber.Handler,
 	roleGuard func(roles ...string) fiber.Handler,
 	tracingSvc TracingService,
+	alertWriter alerts.AlertWriter,
 ) {
 	repo := &Repository{db: db}
-	svc := &Service{repo: repo, mc: mc, bucket: cfg.MinioBucket, tracingSvc: tracingSvc}
+	svc := &Service{repo: repo, mc: mc, bucket: cfg.MinioBucket, tracingSvc: tracingSvc, alertWriter: alertWriter}
 
 	// ─── Student — submission lifecycle ──────────────────────────────────────
-	student := app.Group("/actividades", authMW, roleGuard("estudiante"))
-	student.Post("/:aid/submission", UploadHandler(svc))
-	student.Put("/:aid/submission", ReplaceHandler(svc))
-	student.Delete("/:aid/submission", DeleteHandler(svc))
-	student.Get("/:aid/submission", GetSubmissionHandler(svc))
-	student.Get("/:aid/submission/download", StudentDownloadHandler(svc))
+	studentMW := []fiber.Handler{authMW, roleGuard("estudiante")}
+	app.Post("/actividades/:aid/submission", append(studentMW, UploadHandler(svc))...)
+	app.Put("/actividades/:aid/submission", append(studentMW, ReplaceHandler(svc))...)
+	app.Delete("/actividades/:aid/submission", append(studentMW, DeleteHandler(svc))...)
+	app.Get("/actividades/:aid/submission", append(studentMW, GetSubmissionHandler(svc))...)
+	app.Get("/actividades/:aid/submission/download", append(studentMW, StudentDownloadHandler(svc))...)
 
 	// ─── Docente & Co-docente — submission review ─────────────────────────────
 	docente := app.Group("/cursos", authMW, roleGuard("docente", "co_docente"))

@@ -2,9 +2,11 @@ package academic
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
+	"github.com/Elder2003/nextlab-api/internal/format"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -461,9 +463,19 @@ func RemoveStudentFromGrupo(ctx context.Context, db *pgxpool.Pool, userID, grupo
 
 // ─── Actividades ─────────────────────────────────────────────────────────────
 
+func scanFormatRules(data []byte, a *Actividad) {
+	if data == nil {
+		return
+	}
+	var cfg format.FormatRulesConfig
+	if json.Unmarshal(data, &cfg) == nil {
+		a.FormatRules = &cfg
+	}
+}
+
 func GetActividadesByCurso(ctx context.Context, db *pgxpool.Pool, cursoID uuid.UUID) ([]Actividad, error) {
 	rows, err := db.Query(ctx,
-		`SELECT id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, created_at, updated_at
+		`SELECT id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, format_rules, created_at, updated_at
 		 FROM actividades WHERE curso_id = $1 ORDER BY deadline`, cursoID)
 	if err != nil {
 		return nil, err
@@ -472,10 +484,12 @@ func GetActividadesByCurso(ctx context.Context, db *pgxpool.Pool, cursoID uuid.U
 	var list []Actividad
 	for rows.Next() {
 		var a Actividad
+		var fmtBytes []byte
 		if err := rows.Scan(&a.ID, &a.CursoID, &a.Title, &a.Tipo, &a.Deadline, &a.Instructions,
-			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &a.CreatedAt, &a.UpdatedAt); err != nil {
+			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &fmtBytes, &a.CreatedAt, &a.UpdatedAt); err != nil {
 			return nil, err
 		}
+		scanFormatRules(fmtBytes, &a)
 		list = append(list, a)
 	}
 	return list, rows.Err()
@@ -483,81 +497,123 @@ func GetActividadesByCurso(ctx context.Context, db *pgxpool.Pool, cursoID uuid.U
 
 func GetActividadByIDAndCurso(ctx context.Context, db *pgxpool.Pool, id, cursoID uuid.UUID) (*Actividad, error) {
 	a := &Actividad{}
+	var fmtBytes []byte
 	err := db.QueryRow(ctx,
-		`SELECT id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, created_at, updated_at
+		`SELECT id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, format_rules, created_at, updated_at
 		 FROM actividades WHERE id = $1 AND curso_id = $2`, id, cursoID).
 		Scan(&a.ID, &a.CursoID, &a.Title, &a.Tipo, &a.Deadline, &a.Instructions,
-			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &a.CreatedAt, &a.UpdatedAt)
+			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &fmtBytes, &a.CreatedAt, &a.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
-	return a, err
+	if err != nil {
+		return nil, err
+	}
+	scanFormatRules(fmtBytes, a)
+	return a, nil
 }
 
 func GetActividadByID(ctx context.Context, db *pgxpool.Pool, id uuid.UUID) (*Actividad, error) {
 	a := &Actividad{}
+	var fmtBytes []byte
 	err := db.QueryRow(ctx,
-		`SELECT id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, created_at, updated_at
+		`SELECT id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, format_rules, created_at, updated_at
 		 FROM actividades WHERE id = $1`, id).
 		Scan(&a.ID, &a.CursoID, &a.Title, &a.Tipo, &a.Deadline, &a.Instructions,
-			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &a.CreatedAt, &a.UpdatedAt)
+			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &fmtBytes, &a.CreatedAt, &a.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
-	return a, err
-}
-
-func CreateActividad(ctx context.Context, db *pgxpool.Pool, cursoID uuid.UUID, title, tipo string, deadline time.Time, instructions string) (*Actividad, error) {
-	a := &Actividad{}
-	err := db.QueryRow(ctx,
-		`INSERT INTO actividades (curso_id, title, tipo, deadline, instructions)
-		 VALUES ($1, $2, $3::actividad_tipo, $4, $5)
-		 RETURNING id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, created_at, updated_at`,
-		cursoID, title, tipo, deadline, instructions).
-		Scan(&a.ID, &a.CursoID, &a.Title, &a.Tipo, &a.Deadline, &a.Instructions,
-			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
+	scanFormatRules(fmtBytes, a)
 	return a, nil
 }
 
-func UpdateActividad(ctx context.Context, db *pgxpool.Pool, id, cursoID uuid.UUID, deadline *time.Time, instructions *string) (*Actividad, error) {
+func marshalFormatRules(rules *format.FormatRulesConfig) ([]byte, bool) {
+	if rules == nil {
+		return nil, false
+	}
+	// Empty config means "clear rules" — set column to NULL
+	if rules.MinPages == nil && rules.MaxPages == nil && rules.MinWordCount == nil && len(rules.RequiredTypes) == 0 {
+		return nil, true
+	}
+	data, err := json.Marshal(rules)
+	if err != nil {
+		return nil, false
+	}
+	return data, true
+}
+
+func CreateActividad(ctx context.Context, db *pgxpool.Pool, cursoID uuid.UUID, title, tipo string, deadline time.Time, instructions string, formatRules *format.FormatRulesConfig) (*Actividad, error) {
+	rulesJSON, _ := marshalFormatRules(formatRules)
 	a := &Actividad{}
+	var fmtBytes []byte
+	err := db.QueryRow(ctx,
+		`INSERT INTO actividades (curso_id, title, tipo, deadline, instructions, format_rules)
+		 VALUES ($1, $2, $3::actividad_tipo, $4, $5, $6)
+		 RETURNING id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, format_rules, created_at, updated_at`,
+		cursoID, title, tipo, deadline, instructions, rulesJSON).
+		Scan(&a.ID, &a.CursoID, &a.Title, &a.Tipo, &a.Deadline, &a.Instructions,
+			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &fmtBytes, &a.CreatedAt, &a.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	scanFormatRules(fmtBytes, a)
+	return a, nil
+}
+
+func UpdateActividad(ctx context.Context, db *pgxpool.Pool, id, cursoID uuid.UUID, deadline *time.Time, instructions *string, formatRules *format.FormatRulesConfig, updateFormatRules bool) (*Actividad, error) {
+	rulesJSON, _ := marshalFormatRules(formatRules)
+	a := &Actividad{}
+	var fmtBytes []byte
 	err := db.QueryRow(ctx,
 		`UPDATE actividades SET
 		   deadline     = COALESCE($3, deadline),
 		   instructions = COALESCE($4, instructions),
+		   format_rules = CASE WHEN $5::boolean THEN $6::jsonb ELSE format_rules END,
 		   updated_at   = NOW()
 		 WHERE id = $1 AND curso_id = $2
-		 RETURNING id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, created_at, updated_at`,
-		id, cursoID, deadline, instructions).
+		 RETURNING id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, format_rules, created_at, updated_at`,
+		id, cursoID, deadline, instructions, updateFormatRules, rulesJSON).
 		Scan(&a.ID, &a.CursoID, &a.Title, &a.Tipo, &a.Deadline, &a.Instructions,
-			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &a.CreatedAt, &a.UpdatedAt)
+			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &fmtBytes, &a.CreatedAt, &a.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
-	return a, err
+	if err != nil {
+		return nil, err
+	}
+	scanFormatRules(fmtBytes, a)
+	return a, nil
 }
 
-func UpdateActividadFull(ctx context.Context, db *pgxpool.Pool, id, cursoID uuid.UUID, title, tipo string, deadline time.Time, instructions string) (*Actividad, error) {
+func UpdateActividadFull(ctx context.Context, db *pgxpool.Pool, id, cursoID uuid.UUID, title, tipo string, deadline time.Time, instructions string, formatRules *format.FormatRulesConfig, updateFormatRules bool) (*Actividad, error) {
+	rulesJSON, _ := marshalFormatRules(formatRules)
 	a := &Actividad{}
+	var fmtBytes []byte
 	err := db.QueryRow(ctx,
 		`UPDATE actividades SET
 		   title        = $3,
 		   tipo         = $4::actividad_tipo,
 		   deadline     = $5,
 		   instructions = $6,
+		   format_rules = CASE WHEN $7::boolean THEN $8::jsonb ELSE format_rules END,
 		   updated_at   = NOW()
 		 WHERE id = $1 AND curso_id = $2
-		 RETURNING id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, created_at, updated_at`,
-		id, cursoID, title, tipo, deadline, instructions).
+		 RETURNING id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, format_rules, created_at, updated_at`,
+		id, cursoID, title, tipo, deadline, instructions, updateFormatRules, rulesJSON).
 		Scan(&a.ID, &a.CursoID, &a.Title, &a.Tipo, &a.Deadline, &a.Instructions,
-			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &a.CreatedAt, &a.UpdatedAt)
+			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &fmtBytes, &a.CreatedAt, &a.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
-	return a, err
+	if err != nil {
+		return nil, err
+	}
+	scanFormatRules(fmtBytes, a)
+	return a, nil
 }
 
 // UpdateLateSubmissionFlag atomically updates late_submission_allowed and inserts an audit log entry.
@@ -569,20 +625,22 @@ func UpdateLateSubmissionFlag(ctx context.Context, db *pgxpool.Pool, actividadID
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	a := &Actividad{}
+	var fmtBytes []byte
 	err = tx.QueryRow(ctx,
 		`UPDATE actividades SET late_submission_allowed = $1, updated_at = NOW()
 		 WHERE id = $2
 		   AND curso_id IN (SELECT id FROM cursos WHERE docente_id = $3)
-		 RETURNING id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, created_at, updated_at`,
+		 RETURNING id, curso_id, title, tipo::text, deadline, instructions, trace_enabled, has_submissions, late_submission_allowed, format_rules, created_at, updated_at`,
 		newVal, actividadID, docenteID).
 		Scan(&a.ID, &a.CursoID, &a.Title, &a.Tipo, &a.Deadline, &a.Instructions,
-			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &a.CreatedAt, &a.UpdatedAt)
+			&a.TraceEnabled, &a.HasSubmissions, &a.LateSubmissionAllowed, &fmtBytes, &a.CreatedAt, &a.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	scanFormatRules(fmtBytes, a)
 
 	prev := "false"
 	if !newVal {

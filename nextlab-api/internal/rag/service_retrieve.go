@@ -30,6 +30,8 @@ func NewRetrieveService(
 
 // QueryCurricular embeds the query, fetches rubrics (full, no similarity ranking),
 // then runs a scoped similarity search on non-rubric active chunks.
+// If the actividad has interdisciplinary scopes, also queries each extra scope
+// and returns a deduplicated union of all chunks.
 // Rubrics excluded from token budget per FR-005/SC-004.
 func (s *RetrieveService) QueryCurricular(ctx context.Context, req CurricularQueryRequest) (*RetrievalResponse, error) {
 	queryVec, err := s.embedClient.Embed(ctx, req.Query)
@@ -44,9 +46,37 @@ func (s *RetrieveService) QueryCurricular(ctx context.Context, req CurricularQue
 	}
 
 	limit := s.resolveLimit(req.MaxChunks)
-	chunks, err := s.curRepo.QuerySimilar(ctx, req.Carrera, req.Semestre, req.CodigoMateria, formatVector(queryVec), limit)
+	vecStr := formatVector(queryVec)
+
+	chunks, err := s.curRepo.QuerySimilar(ctx, req.Carrera, req.Semestre, req.CodigoMateria, vecStr, limit)
 	if err != nil {
 		return nil, fmt.Errorf("similarity query: %w", err)
+	}
+
+	// Union extra interdisciplinary scopes when actividadID is set
+	if req.ActividadID != nil {
+		extraScopes, err := s.curRepo.GetInterdisciplinaryScopes(ctx, *req.ActividadID)
+		if err != nil {
+			return nil, fmt.Errorf("get interdisciplinary scopes: %w", err)
+		}
+		for _, scope := range extraScopes {
+			extra, err := s.curRepo.QuerySimilar(ctx, scope.Carrera, scope.Semestre, scope.CodigoMateria, vecStr, limit)
+			if err != nil {
+				return nil, fmt.Errorf("similarity query (extra scope): %w", err)
+			}
+			chunks = append(chunks, extra...)
+		}
+		// Deduplicate by DocumentID, keeping first occurrence
+		seen := make(map[string]bool, len(chunks))
+		deduped := chunks[:0]
+		for _, ch := range chunks {
+			key := ch.DocumentID.String() + ":" + fmt.Sprintf("%d", ch.ChunkIndex)
+			if !seen[key] {
+				seen[key] = true
+				deduped = append(deduped, ch)
+			}
+		}
+		chunks = deduped
 	}
 
 	return &RetrievalResponse{

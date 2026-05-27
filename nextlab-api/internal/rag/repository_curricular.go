@@ -3,6 +3,7 @@ package rag
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -141,6 +142,112 @@ func (r *CurricularRepository) QuerySimilar(ctx context.Context, carrera string,
 	}
 	defer rows.Close()
 	return scanCurricularChunksWithScore(rows)
+}
+
+func (r *CurricularRepository) DeleteDocument(ctx context.Context, id uuid.UUID) (string, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+
+	var minioPath string
+	err = tx.QueryRow(ctx,
+		`SELECT minio_path FROM rag_curricular WHERE id = $1`, id,
+	).Scan(&minioPath)
+	if err == pgx.ErrNoRows {
+		return "", fmt.Errorf("not_found")
+	}
+	if err != nil {
+		return "", err
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM rag_curricular WHERE id = $1`, id); err != nil {
+		return "", err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return "", err
+	}
+	return minioPath, nil
+}
+
+func (r *CurricularRepository) ListDocuments(ctx context.Context, carrera string, semestre int, codigoMateria string, page, limit int) ([]CurricularDocumentSummary, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
+	whereClause := " WHERE ($1='' OR carrera=$1) AND ($2=0 OR semestre=$2) AND ($3='' OR codigo_materia=$3)"
+	args := []any{carrera, semestre, codigoMateria}
+
+	var total int
+	if err := r.db.QueryRow(ctx,
+		"SELECT COUNT(*) FROM rag_curricular"+whereClause, args...,
+	).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.db.Query(ctx,
+		"SELECT id, carrera, semestre, codigo_materia, original_filename, is_rubric, minio_path, created_at"+
+			" FROM rag_curricular"+whereClause+
+			" ORDER BY created_at DESC LIMIT $"+strconv.Itoa(len(args)+1)+" OFFSET $"+strconv.Itoa(len(args)+2),
+		append(args, limit, offset)...,
+	)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var docs []CurricularDocumentSummary
+	for rows.Next() {
+		var d CurricularDocumentSummary
+		if err := rows.Scan(&d.ID, &d.Carrera, &d.Semestre, &d.CodigoMateria, &d.OriginalFilename, &d.IsRubric, &d.MinioPath, &d.CreatedAt); err != nil {
+			return nil, 0, err
+		}
+		docs = append(docs, d)
+	}
+	if docs == nil {
+		docs = []CurricularDocumentSummary{}
+	}
+	return docs, total, rows.Err()
+}
+
+func (r *CurricularRepository) GetInterdisciplinaryScopes(ctx context.Context, actividadID uuid.UUID) ([]struct {
+	Carrera       string
+	Semestre      int
+	CodigoMateria string
+}, error) {
+	rows, err := r.db.Query(ctx,
+		`SELECT carrera, semestre, codigo_materia
+		 FROM actividad_interdisciplinary_scopes
+		 WHERE actividad_id = $1`, actividadID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var scopes []struct {
+		Carrera       string
+		Semestre      int
+		CodigoMateria string
+	}
+	for rows.Next() {
+		var s struct {
+			Carrera       string
+			Semestre      int
+			CodigoMateria string
+		}
+		if err := rows.Scan(&s.Carrera, &s.Semestre, &s.CodigoMateria); err != nil {
+			return nil, err
+		}
+		scopes = append(scopes, s)
+	}
+	return scopes, rows.Err()
 }
 
 func scanCurricularChunks(rows pgx.Rows) ([]ChunkResult, error) {
