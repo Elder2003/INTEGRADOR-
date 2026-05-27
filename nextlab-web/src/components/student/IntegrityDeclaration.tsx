@@ -3,41 +3,22 @@ interface Props {
   onChange: (checked: boolean) => void
 }
 
-export default function IntegrityDeclaration({ checked, onChange }: Props) {
+export function IntegrityDeclaration({ checked, onChange }: Props) {
   return (
     <label
-      style={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 10,
-        cursor: 'pointer',
-        padding: '12px 14px',
-        borderRadius: 6,
-        border: `1px solid ${checked ? 'var(--color-accent)' : 'var(--color-border)'}`,
-        backgroundColor: checked ? 'var(--color-accent-dim)' : 'transparent',
-        transition: 'border-color 0.2s, background-color 0.2s',
-      }}
+      className={`flex items-start gap-2.5 cursor-pointer px-3.5 py-3 rounded-md border transition-colors ${
+        checked
+          ? 'border-[#E85D24] bg-[#E85D24]/10'
+          : 'border-[#2e2e2e] bg-transparent'
+      }`}
     >
       <input
         type="checkbox"
         checked={checked}
         onChange={e => onChange(e.target.checked)}
-        style={{
-          marginTop: 2,
-          accentColor: 'var(--color-accent)',
-          width: 16,
-          height: 16,
-          flexShrink: 0,
-          cursor: 'pointer',
-        }}
+        className="mt-0.5 w-4 h-4 shrink-0 cursor-pointer accent-[#E85D24]"
       />
-      <span
-        style={{
-          fontSize: 'var(--font-size-sm)',
-          color: 'var(--color-text-secondary)',
-          lineHeight: 1.6,
-        }}
-      >
+      <span className="text-sm text-[#888888] leading-relaxed">
         Declaro que este trabajo es de mi autoría y que no he utilizado herramientas de inteligencia
         artificial generativa no declaradas en su elaboración. Entiendo que el sistema de auditoría
         ha registrado mi proceso de resolución y que cualquier anomalía detectada será revisada por

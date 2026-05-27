@@ -9,7 +9,7 @@ interface Props {
   onClear?: () => void
 }
 
-export default function FileUpload({
+export function FileUpload({
   acceptedTypes,
   acceptedLabels,
   onFileSelect,
@@ -33,38 +33,19 @@ export default function FileUpload({
 
   if (selectedFile) {
     return (
-      <div
-        style={{
-          border: '1px solid var(--color-success)',
-          borderRadius: 8,
-          padding: '14px 18px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          backgroundColor: 'rgba(63,166,110,0.05)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <File size={20} color="var(--color-success)" />
+      <div className="border border-[#2e2e2e] rounded-lg px-4 py-3 flex items-center justify-between bg-[#1a1a1a]">
+        <div className="flex items-center gap-2.5">
+          <File size={20} className="text-[#E85D24] shrink-0" />
           <div>
-            <div
-              style={{
-                color: 'var(--color-text-primary)',
-                fontWeight: 500,
-                marginBottom: 2,
-              }}
-            >
-              {selectedFile.name}
-            </div>
-            <div style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-secondary)' }}>
-              {(selectedFile.size / 1024).toFixed(0)} KB
-            </div>
+            <div className="text-[#f0f0f0] font-medium text-sm">{selectedFile.name}</div>
+            <div className="text-[#888888] text-xs">{(selectedFile.size / 1024).toFixed(0)} KB</div>
           </div>
         </div>
         {onClear && (
           <button
+            type="button"
             onClick={onClear}
-            style={{ color: 'var(--color-text-muted)', padding: 4 }}
+            className="text-[#888888] hover:text-[#f0f0f0] transition-colors p-1"
             title="Quitar archivo"
           >
             <X size={16} />
@@ -83,31 +64,17 @@ export default function FileUpload({
         setIsDragging(true)
       }}
       onDragLeave={() => setIsDragging(false)}
-      style={{
-        border: `2px dashed ${isDragging ? 'var(--color-accent)' : 'var(--color-border)'}`,
-        borderRadius: 8,
-        padding: '32px 24px',
-        textAlign: 'center',
-        cursor: 'pointer',
-        backgroundColor: isDragging ? 'var(--color-accent-dim)' : 'transparent',
-        transition: 'border-color 0.2s, background-color 0.2s',
-      }}
+      className={`border-2 border-dashed rounded-lg py-8 px-6 text-center cursor-pointer transition-colors ${
+        isDragging
+          ? 'border-[#E85D24] bg-[#E85D24]/5'
+          : 'border-[#2e2e2e] hover:border-[#888888]'
+      }`}
     >
-      <Upload
-        size={28}
-        color="var(--color-text-muted)"
-        style={{ marginBottom: 10, display: 'block', margin: '0 auto 10px' }}
-      />
-      <div
-        style={{
-          color: 'var(--color-text-primary)',
-          fontWeight: 500,
-          marginBottom: 6,
-        }}
-      >
+      <Upload size={28} className="text-[#888888] mx-auto mb-2.5" />
+      <div className="text-[#f0f0f0] font-medium text-sm mb-1.5">
         Arrastra tu archivo aquí o haz clic para seleccionar
       </div>
-      <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
+      <div className="text-[#888888] text-sm">
         Tipos aceptados: {acceptedLabels.join(', ')}
       </div>
       <input
@@ -115,7 +82,7 @@ export default function FileUpload({
         type="file"
         accept={acceptedTypes.join(',')}
         onChange={handleChange}
-        style={{ display: 'none' }}
+        className="hidden"
       />
     </div>
   )

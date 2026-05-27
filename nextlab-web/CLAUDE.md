@@ -4,7 +4,7 @@ For additional context about the project plan, constitution, and implementation
 details, read the current milestone plan at:
 
 <!-- SPECKIT START -->
-`specs/004-mw4-student-portal/plan.md`
+`specs/005-mw5-file-submissions/plan.md`
 <!-- SPECKIT END -->
 
 ## Key files

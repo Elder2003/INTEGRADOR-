@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { getActividad, updateActividad, deleteActividad, grantAccess, revokeAccess } from '../../api/academic'
 import type { Actividad, CodocenteGrant } from '../../types/academic'
 import { ApiError } from '../../types'
@@ -164,6 +164,16 @@ export function ActividadDetailPage() {
           </button>
         </div>
         {toggleError && <ErrorMessage message={toggleError} onDismiss={() => setToggleError(null)} />}
+      </div>
+
+      {/* Ver Entregas */}
+      <div className="mb-6">
+        <Link
+          to={`/docente/cursos/${cursoId}/actividades/${aid}/submissions`}
+          className="inline-flex items-center gap-2 bg-[#1a1a1a] border border-[#2e2e2e] rounded-lg px-4 py-2 text-sm text-[#f0f0f0] hover:border-[#E85D24] transition-colors"
+        >
+          Ver Entregas
+        </Link>
       </div>
 
       {/* Co-docente grants */}

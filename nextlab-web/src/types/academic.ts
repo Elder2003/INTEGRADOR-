@@ -152,6 +152,63 @@ export interface UpdateGrupoRequest {
   capacity?: number
 }
 
+export interface SubmissionResponse {
+  id: string
+  actividad_id: string
+  original_filename: string
+  file_size_bytes: number
+  mime_type: string
+  submitted_at: string
+  is_late: boolean
+  edit_window_expires_at: string | null
+  is_locked: boolean
+  last_replaced_at: string | null
+}
+
+export interface StudentInfo {
+  id: string
+  name: string
+  email: string
+}
+
+export interface SubmissionListItem {
+  id: string
+  student: StudentInfo
+  original_filename: string
+  file_size_bytes: number
+  mime_type: string
+  submitted_at: string
+  is_late: boolean
+  is_locked: boolean
+  last_replaced_at: string | null
+  edit_window_expires_at: string | null
+}
+
+export interface SubmissionListResponse {
+  actividad_id: string
+  submissions: SubmissionListItem[]
+  total: number
+}
+
+export interface ConfigChangeActor {
+  id: string
+  name: string
+}
+
+export interface ConfigChangeResponse {
+  id: string
+  changed_by: ConfigChangeActor
+  field_name: string
+  previous_value: string
+  new_value: string
+  changed_at: string
+}
+
+export interface ConfigChangesResponse {
+  actividad_id: string
+  changes: ConfigChangeResponse[]
+}
+
 export interface GrupoRef {
   id: string
   name: string

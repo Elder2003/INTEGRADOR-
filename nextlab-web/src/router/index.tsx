@@ -16,6 +16,9 @@ import { CreateActividadPage } from '../pages/docente/CreateActividadPage'
 import { EditActividadPage } from '../pages/docente/EditActividadPage'
 import { ActividadDetailPage } from '../pages/docente/ActividadDetailPage'
 import { DashboardPage as CodocenteDashboard } from '../pages/codocente/DashboardPage'
+import { SubmissionsPage } from '../pages/docente/SubmissionsPage'
+import { SubmissionDetailPage } from '../pages/docente/SubmissionDetailPage'
+import { CodocenteSubmissionsPage } from '../pages/codocente/SubmissionsPage'
 import { DashboardPage as AdminDashboard } from '../pages/admin/DashboardPage'
 import { CarrerasPage } from '../pages/admin/CarrerasPage'
 import { MateriasPage } from '../pages/admin/MateriasPage'
@@ -83,6 +86,8 @@ const router = createBrowserRouter([
           { path: '/docente/cursos/:id/actividades/new', element: <CreateActividadPage /> },
           { path: '/docente/cursos/:id/actividades/:aid', element: <ActividadDetailPage /> },
           { path: '/docente/cursos/:id/actividades/:aid/edit', element: <EditActividadPage /> },
+          { path: '/docente/cursos/:cid/actividades/:aid/submissions', element: <SubmissionsPage /> },
+          { path: '/docente/cursos/:cid/actividades/:aid/submissions/:sid', element: <SubmissionDetailPage /> },
         ],
       },
     ],
@@ -94,6 +99,8 @@ const router = createBrowserRouter([
         element: <Layout />,
         children: [
           { path: '/codocente/dashboard', element: <CodocenteDashboard /> },
+          { path: '/codocente/cursos/:cid/actividades/:aid/submissions', element: <CodocenteSubmissionsPage /> },
+          { path: '/codocente/cursos/:cid/actividades/:aid/submissions/:sid', element: <SubmissionDetailPage /> },
         ],
       },
     ],
