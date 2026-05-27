@@ -34,6 +34,9 @@ import { DefensaSchedulingPage } from '../pages/docente/DefensaSchedulingPage'
 import { GitAnalysisPage } from '../pages/docente/GitAnalysisPage'
 import { AIReportPage } from '../pages/docente/AIReportPage'
 import { DetectionReportPage } from '../pages/docente/DetectionReportPage'
+import { AlertsPage } from '../pages/docente/AlertsPage'
+import { ActivityAnalyticsPage } from '../pages/docente/ActivityAnalyticsPage'
+import { CourseAnalyticsPage } from '../pages/docente/CourseAnalyticsPage'
 
 export function roleHomeFor(role: Role): string {
   switch (role) {
@@ -105,6 +108,9 @@ const router = createBrowserRouter([
           { path: '/docente/cursos/:cid/actividades/:aid/submissions/:subid/git-analysis', element: <GitAnalysisPage /> },
           { path: '/docente/cursos/:cid/actividades/:aid/submissions/:subid/ai-report', element: <AIReportPage /> },
           { path: '/docente/cursos/:cid/actividades/:aid/submissions/:subid/detection-report', element: <DetectionReportPage /> },
+          { path: '/docente/alertas', element: <AlertsPage /> },
+          { path: '/docente/cursos/:cid/actividades/:aid/analytics', element: <ActivityAnalyticsPage /> },
+          { path: '/docente/cursos/:cid/analytics', element: <CourseAnalyticsPage /> },
         ],
       },
     ],
@@ -124,6 +130,7 @@ const router = createBrowserRouter([
           { path: '/codocente/cursos/:cid/actividades/:aid/submissions/:subid/git-analysis', element: <GitAnalysisPage /> },
           { path: '/codocente/cursos/:cid/actividades/:aid/submissions/:subid/ai-report', element: <AIReportPage /> },
           { path: '/codocente/cursos/:cid/actividades/:aid/submissions/:subid/detection-report', element: <DetectionReportPage /> },
+          { path: '/codocente/cursos/:cid/actividades/:aid/analytics', element: <ActivityAnalyticsPage /> },
         ],
       },
     ],

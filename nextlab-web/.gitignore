@@ -24,3 +24,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Spec & planning artifacts
+specs/
+.specify/
+.claude/
+CLAUDE.md

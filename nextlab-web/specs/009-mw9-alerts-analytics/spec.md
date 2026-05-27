@@ -10,6 +10,15 @@
 
 ---
 
+## Clarifications
+
+### Session 2026-05-27
+
+- Q: Is the alerts page a global list across all the docente's activities/courses, or scoped per-course? → A: Global list — single page at `/docente/alertas`, one nav link, all activities mixed.
+- Q: Should co-docentes be able to view course-level analytics? → A: Activity analytics only — co-docentes see activity analytics; course analytics page is docente-only.
+
+---
+
 ## Overview
 
 MW9 adds two complementary surfaces for docentes:
@@ -72,7 +81,7 @@ A docente opens a course's analytics page and sees aggregated statistics across 
 1. **Given** a course with graded activities, **When** docente opens course analytics, **Then** a per-activity summary table is shown (activity name, submissions, average grade, late count).
 2. **Given** a course with overall grade data, **When** docente views analytics, **Then** an overall score distribution for the course is displayed.
 3. **Given** a course with no graded activities, **When** docente views course analytics, **Then** the page shows "Sin datos de calificaciones aún."
-4. **Given** a co-docente accesses the course analytics page, **When** the page loads, **Then** the same statistics are displayed read-only.
+4. **Given** a co-docente attempts to access the course analytics page, **When** the route is evaluated, **Then** they are redirected to their role dashboard (course analytics is docente-only).
 
 ---
 
@@ -84,6 +93,7 @@ A docente opens a course's analytics page and sees aggregated statistics across 
 - Alert dismiss fails (network error) — the alert remains visible and an inline error message is shown next to the dismiss button.
 - Analytics page loaded while backend is computing stats — a loading state is shown; if the backend returns empty data, the page renders the zero-state gracefully.
 - Co-docente should not see the docente's personal alert list — alerts are only accessible at `/docente/...` routes.
+- Co-docente attempting to navigate to the course analytics URL is redirected to their dashboard by the `ProtectedRoute` — no course analytics page exists under `/codocente/...`.
 
 ---
 
@@ -91,7 +101,7 @@ A docente opens a course's analytics page and sees aggregated statistics across 
 
 ### Functional Requirements
 
-- **FR-001**: The docente portal MUST include an alerts page accessible from the navigation that lists all undismissed alerts for the authenticated docente.
+- **FR-001**: The docente portal MUST include a global alerts page at `/docente/alertas`, accessible via a nav link, listing all undismissed alerts for the authenticated docente across all their activities and courses.
 - **FR-002**: Each alert MUST display: alert type, severity level, description, activity name (linked to the activity when accessible), and creation date.
 - **FR-003**: Each alert MUST have a "Descartar" button that, when clicked, dismisses the alert and removes it from the active list.
 - **FR-004**: The alerts list MUST show a "Sin alertas activas." empty state when no undismissed alerts exist.
@@ -101,7 +111,7 @@ A docente opens a course's analytics page and sees aggregated statistics across 
 - **FR-008**: The course detail page (docente) MUST include a link to the course analytics page.
 - **FR-009**: The course analytics page MUST display: a per-activity summary table and an overall grade distribution for the course.
 - **FR-010**: Both analytics pages MUST handle empty states (no data) with a clear explanatory message.
-- **FR-011**: Both analytics pages MUST be accessible to co-docentes at their `/codocente/...` route equivalents, read-only (no edit controls exist on analytics pages).
+- **FR-011**: The activity analytics page MUST be accessible to co-docentes at its `/codocente/...` route equivalent, read-only. The course analytics page is docente-only and MUST NOT be accessible to co-docentes.
 - **FR-012**: Analytics data MUST be rendered exactly as returned by the API — no aggregation, computation, or transformation on the client.
 
 ### Key Entities
@@ -130,7 +140,8 @@ A docente opens a course's analytics page and sees aggregated statistics across 
 - Alerts are generated entirely by the backend (M9) — the frontend never creates, modifies, or computes alert conditions. Dismiss is the only write operation from the client.
 - Alert types and severity levels are strings returned by the API — the frontend displays them as-is without mapping to icons or colors beyond basic severity styling (e.g., distinguishing high/medium/low).
 - Activity analytics and course analytics are pre-computed by the backend (M10, M12) — the frontend requests them and renders the response. No charting library is used; grade distribution is displayed as a table.
-- The alerts page is a docente-only feature — co-docentes do not have an alerts page. Only the analytics pages are shared with co-docentes.
+- The alerts page is a docente-only feature at `/docente/alertas` — co-docentes do not have an alerts page.
+- Course analytics is docente-only. Co-docentes have access to activity analytics only (activity-scoped, matching their grant level).
 - Links to the activity analytics page are added to the existing docente `ActividadDetailPage`; links to the course analytics page are added to the existing docente `CursoDetailPage`.
 - Alert `actividad_title` is included in the API response so the frontend can display the name without a separate fetch.
 - The grade distribution from the API is a list of `{ range_label: string, count: number }` objects (e.g., `{ range_label: "90-100", count: 5 }`).

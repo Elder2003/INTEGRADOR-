@@ -22,6 +22,20 @@ import { DefensaSlotDisplay } from '../../components/student/DefensaSlotDisplay'
 import { GitSubmissionForm } from '../../components/student/GitSubmissionForm'
 import { getMyDefensaSlot } from '../../api/grading'
 import type { DefensaSlot } from '../../types/academic'
+import { getAppeal, createAppeal } from '../../api/appeals'
+import type { Appeal } from '../../types/academic'
+
+const APPEAL_STATUS_LABEL: Record<string, string> = {
+  pending: 'Pendiente',
+  accepted: 'Aceptada',
+  rejected: 'Rechazada',
+}
+
+const APPEAL_STATUS_CLASS: Record<string, string> = {
+  pending: 'bg-yellow-400/10 text-yellow-400',
+  accepted: 'bg-green-400/10 text-green-400',
+  rejected: 'bg-red-400/10 text-red-400',
+}
 
 const tipoLabel: Record<string, string> = {
   practica: 'Práctica',
@@ -92,6 +106,14 @@ export function ActividadDetailPage() {
   // Defensa slot state (only fetched for defensa_oral)
   const [defensaSlot, setDefensaSlot] = useState<DefensaSlot | null>(null)
 
+  // Appeal state
+  const [appeal, setAppeal] = useState<Appeal | null>(null)
+  const [appealLoading, setAppealLoading] = useState(false)
+  const [showAppealForm, setShowAppealForm] = useState(false)
+  const [appealMessage, setAppealMessage] = useState('')
+  const [appealSubmitError, setAppealSubmitError] = useState<string | null>(null)
+  const [appealSubmitting, setAppealSubmitting] = useState(false)
+
   useEffect(() => {
     if (!cursoId || !aid) return
 
@@ -126,6 +148,15 @@ export function ActividadDetailPage() {
     if (!aid || !actividad || actividad.tipo !== 'defensa_oral') return
     getMyDefensaSlot(aid).then(setDefensaSlot).catch(() => {})
   }, [aid, actividad])
+
+  useEffect(() => {
+    if (!submission || !submission.grade) return
+    setAppealLoading(true)
+    getAppeal(submission.id)
+      .then(setAppeal)
+      .catch(() => {})
+      .finally(() => setAppealLoading(false))
+  }, [submission])
 
   async function handleUpload() {
     if (!aid || !selectedFile) return
@@ -430,6 +461,84 @@ export function ActividadDetailPage() {
         <h2 className="text-base font-semibold text-[#f0f0f0] mb-3">Mi Calificación</h2>
         <GradeDisplay grade={submission?.grade ?? null} hasSubmission={submission !== null} />
       </div>
+
+      {submission !== null && submission.grade !== null && !appealLoading && (
+        <div className="border-t border-[#2e2e2e] pt-4 mt-4">
+          <h2 className="text-base font-semibold text-[#f0f0f0] mb-3">Apelación</h2>
+          {appeal === null && !showAppealForm && (
+            <button
+              type="button"
+              onClick={() => setShowAppealForm(true)}
+              className="text-sm border border-[#2e2e2e] text-[#f0f0f0] px-4 py-2 rounded-lg hover:border-[#E85D24] transition-colors"
+            >
+              Presentar apelación
+            </button>
+          )}
+          {showAppealForm && (
+            <div className="space-y-3">
+              <textarea
+                value={appealMessage}
+                onChange={(e) => setAppealMessage(e.target.value)}
+                placeholder="Explica el motivo de tu apelación..."
+                rows={4}
+                className="w-full bg-[#1a1a1a] border border-[#2e2e2e] rounded-lg p-3 text-[#f0f0f0] text-sm placeholder-[#888888] focus:outline-none focus:border-[#E85D24]"
+              />
+              {appealSubmitError && <p className="text-red-400 text-sm">{appealSubmitError}</p>}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={appealSubmitting}
+                  onClick={async () => {
+                    if (!appealMessage.trim()) {
+                      setAppealSubmitError('La explicación no puede estar vacía.')
+                      return
+                    }
+                    setAppealSubmitError(null)
+                    setAppealSubmitting(true)
+                    try {
+                      const result = await createAppeal(submission.id, appealMessage.trim())
+                      setAppeal(result)
+                      setShowAppealForm(false)
+                      setAppealMessage('')
+                    } catch (err: unknown) {
+                      setAppealSubmitError((err as Error).message)
+                    } finally {
+                      setAppealSubmitting(false)
+                    }
+                  }}
+                  className="px-4 py-2 bg-[#E85D24] text-white text-sm rounded-lg hover:bg-[#d4521f] disabled:opacity-50 transition-colors"
+                >
+                  {appealSubmitting ? 'Enviando...' : 'Enviar apelación'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowAppealForm(false); setAppealMessage(''); setAppealSubmitError(null) }}
+                  className="px-4 py-2 text-sm border border-[#2e2e2e] text-[#f0f0f0] rounded-lg hover:border-[#888888] transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+          {appeal !== null && (
+              <div className="bg-[#1a1a1a] border border-[#2e2e2e] rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2 py-0.5 rounded ${APPEAL_STATUS_CLASS[appeal.status] ?? 'bg-[#2e2e2e] text-[#888888]'}`}>
+                    {APPEAL_STATUS_LABEL[appeal.status] ?? appeal.status}
+                  </span>
+                  <span className="text-xs text-[#888888]">{formatDateTime(appeal.created_at)}</span>
+                </div>
+                <p className="text-sm text-[#f0f0f0]">{appeal.student_message}</p>
+                {appeal.docente_response && (
+                  <div className="border-t border-[#2e2e2e] pt-3">
+                    <p className="text-xs text-[#888888] mb-1">Respuesta del docente:</p>
+                    <p className="text-sm text-[#f0f0f0]">{appeal.docente_response}</p>
+                  </div>
+                )}
+              </div>
+          )}
+        </div>
+      )}
 
       <ConfirmModal
         isOpen={showDeleteConfirm}

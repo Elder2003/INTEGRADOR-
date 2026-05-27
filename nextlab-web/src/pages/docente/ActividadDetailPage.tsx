@@ -188,6 +188,12 @@ export function ActividadDetailPage() {
             Programar Defensas
           </Link>
         )}
+        <Link
+          to={`/docente/cursos/${cursoId}/actividades/${aid}/analytics`}
+          className="inline-flex items-center gap-2 bg-[#1a1a1a] border border-[#2e2e2e] rounded-lg px-4 py-2 text-sm text-[#f0f0f0] hover:border-[#E85D24] transition-colors"
+        >
+          Ver Analíticas
+        </Link>
       </div>
 
       {/* Co-docente grants */}

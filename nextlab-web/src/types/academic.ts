@@ -193,6 +193,7 @@ export interface SubmissionListItem {
   grade: GradeDecision | null
   stage: InvestigaciónStage | null
   repo_url: string | null
+  appeal_status: AppealStatus | null
 }
 
 export interface SubmissionListResponse {
@@ -357,4 +358,73 @@ export interface DetectionReport {
   error_message?: string | null
   similarity_score?: number
   flagged_segments?: FlaggedSegment[]
+}
+
+// MW9 — Alerts & Analytics types
+
+export interface Alert {
+  id: string
+  type: string
+  severity: string
+  description: string
+  actividad_id: string | null
+  curso_id: string | null
+  actividad_title: string
+  created_at: string
+  is_dismissed: boolean
+}
+
+export interface GradeDistributionBucket {
+  range_label: string
+  count: number
+}
+
+export interface StageBreakdown {
+  propuesta: number
+  desarrollo: number
+  revisión: number
+  aprobado: number
+}
+
+export interface ActivityAnalytics {
+  total_submissions: number
+  late_submissions: number
+  grade_distribution: GradeDistributionBucket[]
+  stage_breakdown: StageBreakdown | null
+}
+
+export interface ActivitySummary {
+  actividad_id: string
+  activity_name: string
+  submissions: number
+  average_grade: number | null
+  late_count: number
+}
+
+export interface CourseAnalytics {
+  activity_summaries: ActivitySummary[]
+  overall_grade_distribution: GradeDistributionBucket[]
+}
+
+// MW10 — Appeals types
+
+export type AppealStatus = 'pending' | 'accepted' | 'rejected'
+
+export interface Appeal {
+  id: string
+  submission_id: string
+  student_message: string
+  status: AppealStatus
+  docente_response: string | null
+  created_at: string
+  resolved_at: string | null
+}
+
+export interface CreateAppealRequest {
+  student_message: string
+}
+
+export interface ResolveAppealRequest {
+  decision: 'accept' | 'reject'
+  response_note: string
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   getCurso, deleteCurso,
   getActividades, deleteActividad,
@@ -247,6 +247,12 @@ export function CursoDetailPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Link
+            to={`/docente/cursos/${cursoId}/analytics`}
+            className="px-3 py-1.5 text-sm border border-[#2e2e2e] text-[#f0f0f0] rounded-lg hover:border-[#E85D24] transition-colors"
+          >
+            Ver Analíticas del Curso
+          </Link>
           <button
             type="button"
             onClick={() => navigate(`/docente/cursos/${cursoId}/edit`)}

@@ -14,7 +14,7 @@ function navItemsFor(role: Role): NavItem[] {
     case 'docente':
       return [
         { label: 'My Courses', to: '/docente/dashboard' },
-        { label: 'Analytics', to: '/docente/analytics' },
+        { label: 'Alertas', to: '/docente/alertas' },
       ]
     case 'co_docente':
       return [{ label: 'Granted Activities', to: '/codocente/dashboard' }]

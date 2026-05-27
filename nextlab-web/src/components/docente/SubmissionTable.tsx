@@ -30,7 +30,8 @@ export function SubmissionTable({ submissions, cursoId, actividadId, userRole, a
             <th className="pb-2 pr-4 text-[#888888] font-medium">Archivo</th>
             <th className="pb-2 pr-4 text-[#888888] font-medium">Tamaño</th>
             <th className="pb-2 pr-4 text-[#888888] font-medium">Enviado</th>
-            <th className="pb-2 text-[#888888] font-medium">Estado</th>
+            <th className="pb-2 pr-4 text-[#888888] font-medium">Estado</th>
+            <th className="pb-2 text-[#888888] font-medium">Apelación</th>
           </tr>
         </thead>
         <tbody>
@@ -56,7 +57,7 @@ export function SubmissionTable({ submissions, cursoId, actividadId, userRole, a
               <td className="py-3 pr-4 text-[#888888] whitespace-nowrap">
                 {new Date(item.submitted_at).toLocaleString('es-BO')}
               </td>
-              <td className="py-3">
+              <td className="py-3 pr-4">
                 <div className="flex flex-wrap gap-1">
                   {item.is_late && (
                     <span className="bg-yellow-400/10 text-yellow-400 text-xs px-2 py-0.5 rounded">
@@ -69,6 +70,13 @@ export function SubmissionTable({ submissions, cursoId, actividadId, userRole, a
                     </span>
                   )}
                 </div>
+              </td>
+              <td className="py-3">
+                {item.appeal_status === 'pending' && (
+                  <span className="bg-[#E85D24]/10 text-[#E85D24] text-xs px-2 py-0.5 rounded">
+                    Pendiente
+                  </span>
+                )}
               </td>
             </tr>
           ))}
