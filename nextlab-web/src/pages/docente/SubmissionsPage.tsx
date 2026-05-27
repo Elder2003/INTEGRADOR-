@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { listSubmissions, listConfigChanges } from '../../api/submissions'
-import type { SubmissionListResponse, ConfigChangesResponse } from '../../types/academic'
+import { getActividad } from '../../api/academic'
+import type { SubmissionListResponse, ConfigChangesResponse, Actividad, ActividadFlags } from '../../types/academic'
 import { LoadingSpinner } from '../../components/common/LoadingSpinner'
 import { ErrorMessage } from '../../components/common/ErrorMessage'
 import { SubmissionTable } from '../../components/docente/SubmissionTable'
@@ -10,15 +11,17 @@ export function SubmissionsPage() {
   const { cid, aid } = useParams<{ cid: string; aid: string }>()
   const [data, setData] = useState<SubmissionListResponse | null>(null)
   const [changes, setChanges] = useState<ConfigChangesResponse | null>(null)
+  const [actividad, setActividad] = useState<Actividad | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!cid || !aid) return
-    Promise.all([listSubmissions(cid, aid), listConfigChanges(cid, aid)])
-      .then(([submData, changesData]) => {
+    Promise.all([listSubmissions(cid, aid), listConfigChanges(cid, aid), getActividad(aid)])
+      .then(([submData, changesData, actData]) => {
         setData(submData)
         setChanges(changesData)
+        setActividad(actData)
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false))
@@ -47,6 +50,12 @@ export function SubmissionsPage() {
             cursoId={cid!}
             actividadId={aid!}
             userRole="docente"
+            actividadTipo={actividad?.tipo}
+            actividadFlags={actividad ? ({
+              git_enabled: actividad.git_enabled,
+              ai_enabled: actividad.ai_enabled,
+              detection_enabled: actividad.detection_enabled,
+            } satisfies ActividadFlags) : undefined}
           />
         </div>
       )}

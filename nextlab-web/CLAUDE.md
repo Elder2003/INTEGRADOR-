@@ -4,7 +4,7 @@ For additional context about the project plan, constitution, and implementation
 details, read the current milestone plan at:
 
 <!-- SPECKIT START -->
-`specs/007-mw7-grading/plan.md`
+`specs/008-mw8-git-ai-results/plan.md`
 <!-- SPECKIT END -->
 
 ## Key files

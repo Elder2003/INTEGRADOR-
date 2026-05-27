@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { downloadSubmission } from '../../api/submissions'
-import type { SubmissionListItem } from '../../types/academic'
+import type { SubmissionListItem, ActividadTipo, ActividadFlags } from '../../types/academic'
 import { ErrorMessage } from '../../components/common/ErrorMessage'
+import { useAuth } from '../../context/AuthContext'
+import { GradePanel } from '../../components/docente/GradePanel'
+import { StageSelector } from '../../components/docente/StageSelector'
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString('es-BO', {
@@ -17,11 +20,16 @@ function formatDateTime(iso: string): string {
 export function SubmissionDetailPage() {
   const { cid, aid, sid } = useParams<{ cid: string; aid: string; sid: string }>()
   const location = useLocation()
-  const item = location.state as SubmissionListItem | undefined
+  const rawState = location.state as (SubmissionListItem & { actividadTipo?: ActividadTipo; actividadFlags?: ActividadFlags }) | { item: SubmissionListItem; actividadTipo?: ActividadTipo; actividadFlags?: ActividadFlags } | undefined
+  const item: SubmissionListItem | undefined = rawState
+    ? ('item' in rawState && rawState.item ? rawState.item : rawState as SubmissionListItem)
+    : undefined
+  const actividadTipo = rawState && 'actividadTipo' in rawState ? rawState.actividadTipo : undefined
+  const actividadFlags = rawState && 'actividadFlags' in rawState ? rawState.actividadFlags : undefined
+  const { user } = useAuth()
 
-  const backPath = location.pathname.startsWith('/docente')
-    ? `/docente/cursos/${cid}/actividades/${aid}/submissions`
-    : `/codocente/cursos/${cid}/actividades/${aid}/submissions`
+  const routePrefix = location.pathname.startsWith('/docente') ? '/docente' : '/codocente'
+  const backPath = `${routePrefix}/cursos/${cid}/actividades/${aid}/submissions`
 
   const [downloading, setDownloading] = useState(false)
   const [downloadError, setDownloadError] = useState<string | null>(null)
@@ -123,6 +131,52 @@ export function SubmissionDetailPage() {
           </Link>
         )}
       </div>
+
+      <div className="border-t border-[#2e2e2e] pt-4 mt-4">
+        <h2 className="text-base font-semibold text-[#f0f0f0] mb-3">Calificación</h2>
+        <GradePanel
+          submissionId={sid!}
+          existingGrade={item.grade}
+          readOnly={user?.role === 'co_docente'}
+        />
+      </div>
+
+      {actividadTipo === 'informe' && (
+        <div className="border-t border-[#2e2e2e] pt-4 mt-4">
+          <h2 className="text-base font-semibold text-[#f0f0f0] mb-3">Etapa de investigación</h2>
+          <StageSelector submissionId={sid!} currentStage={item.stage} />
+        </div>
+      )}
+
+      {(item.repo_url || actividadFlags?.ai_enabled || actividadFlags?.detection_enabled) && (
+        <div className="border-t border-[#2e2e2e] pt-4 mt-4 space-y-2">
+          <h2 className="text-base font-semibold text-[#f0f0f0] mb-3">Análisis y Reportes</h2>
+          {item.repo_url && (
+            <Link
+              to={`${routePrefix}/cursos/${cid}/actividades/${aid}/submissions/${sid}/git-analysis`}
+              className="flex items-center gap-2 text-sm text-[#f0f0f0] border border-[#2e2e2e] rounded-lg px-4 py-2 hover:border-[#E85D24] transition-colors w-fit"
+            >
+              Ver análisis Git
+            </Link>
+          )}
+          {actividadFlags?.ai_enabled && (
+            <Link
+              to={`${routePrefix}/cursos/${cid}/actividades/${aid}/submissions/${sid}/ai-report`}
+              className="flex items-center gap-2 text-sm text-[#f0f0f0] border border-[#2e2e2e] rounded-lg px-4 py-2 hover:border-[#E85D24] transition-colors w-fit"
+            >
+              Ver informe IA
+            </Link>
+          )}
+          {actividadFlags?.detection_enabled && (
+            <Link
+              to={`${routePrefix}/cursos/${cid}/actividades/${aid}/submissions/${sid}/detection-report`}
+              className="flex items-center gap-2 text-sm text-[#f0f0f0] border border-[#2e2e2e] rounded-lg px-4 py-2 hover:border-[#E85D24] transition-colors w-fit"
+            >
+              Ver informe de detección
+            </Link>
+          )}
+        </div>
+      )}
     </div>
   )
 }

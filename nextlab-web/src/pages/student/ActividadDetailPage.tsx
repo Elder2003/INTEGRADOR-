@@ -16,6 +16,12 @@ import { FileUpload } from '../../components/student/FileUpload'
 import { IntegrityDeclaration } from '../../components/student/IntegrityDeclaration'
 import { SessionPanel } from '../../components/student/SessionPanel'
 import { useTracingSession } from '../../hooks/useTracingSession'
+import { GradeDisplay } from '../../components/student/GradeDisplay'
+import { ExamForm } from '../../components/student/ExamForm'
+import { DefensaSlotDisplay } from '../../components/student/DefensaSlotDisplay'
+import { GitSubmissionForm } from '../../components/student/GitSubmissionForm'
+import { getMyDefensaSlot } from '../../api/grading'
+import type { DefensaSlot } from '../../types/academic'
 
 const tipoLabel: Record<string, string> = {
   practica: 'Práctica',
@@ -83,6 +89,9 @@ export function ActividadDetailPage() {
   const { status: sessionStatus, startTime: sessionStartTime, startSession, terminateSession } =
     useTracingSession(aid ?? '', actividad?.trace_enabled ?? false)
 
+  // Defensa slot state (only fetched for defensa_oral)
+  const [defensaSlot, setDefensaSlot] = useState<DefensaSlot | null>(null)
+
   useEffect(() => {
     if (!cursoId || !aid) return
 
@@ -112,6 +121,11 @@ export function ActividadDetailPage() {
       .catch((err: Error) => setSubmError(err.message))
       .finally(() => setSubmLoading(false))
   }, [cursoId, aid])
+
+  useEffect(() => {
+    if (!aid || !actividad || actividad.tipo !== 'defensa_oral') return
+    getMyDefensaSlot(aid).then(setDefensaSlot).catch(() => {})
+  }, [aid, actividad])
 
   async function handleUpload() {
     if (!aid || !selectedFile) return
@@ -230,7 +244,28 @@ export function ActividadDetailPage() {
 
         {!submLoading && submError && <ErrorMessage message={submError} />}
 
-        {!submLoading && !submError && submission === null && (
+        {/* Git-enabled activities use GitSubmissionForm instead of file upload */}
+        {!submLoading && !submError && actividad.git_enabled && (
+          <GitSubmissionForm
+            actividadId={aid!}
+            existingSubmission={submission}
+            isPastDeadline={isPast}
+            onSuccess={setSubmission}
+          />
+        )}
+
+        {/* Exam activities use ExamForm instead of file upload */}
+        {!submLoading && !submError && !actividad.git_enabled && actividad.tipo === 'examen' && (
+          <ExamForm
+            actividadId={aid!}
+            existingAnswer={submission?.exam_answer ?? null}
+            submittedAt={submission?.submitted_at ?? null}
+            deadline={actividad.deadline}
+            sessionGate={actividad.trace_enabled && sessionStatus !== 'active'}
+          />
+        )}
+
+        {!submLoading && !submError && !actividad.git_enabled && actividad.tipo !== 'examen' && submission === null && (
           actividad.trace_enabled && sessionStatus !== 'active' ? (
             <p className="text-[#888888] text-sm">
               Inicia la sesión de monitoreo para poder subir tu entrega.
@@ -273,7 +308,7 @@ export function ActividadDetailPage() {
           )
         )}
 
-        {!submLoading && !submError && submission !== null && (
+        {!submLoading && !submError && !actividad.git_enabled && actividad.tipo !== 'examen' && submission !== null && (
           <div className="bg-[#1a1a1a] border border-[#2e2e2e] rounded-lg p-4 space-y-3">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="space-y-1">
@@ -382,6 +417,18 @@ export function ActividadDetailPage() {
             )}
           </div>
         )}
+      </div>
+
+      {actividad.tipo === 'defensa_oral' && (
+        <div className="border-t border-[#2e2e2e] pt-4 mt-4">
+          <h2 className="text-base font-semibold text-[#f0f0f0] mb-3">Mi Defensa</h2>
+          <DefensaSlotDisplay slot={defensaSlot} />
+        </div>
+      )}
+
+      <div className="border-t border-[#2e2e2e] pt-4 mt-4">
+        <h2 className="text-base font-semibold text-[#f0f0f0] mb-3">Mi Calificación</h2>
+        <GradeDisplay grade={submission?.grade ?? null} hasSubmission={submission !== null} />
       </div>
 
       <ConfirmModal

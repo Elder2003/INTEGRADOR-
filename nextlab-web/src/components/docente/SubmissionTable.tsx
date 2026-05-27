@@ -1,14 +1,16 @@
 import { useNavigate } from 'react-router-dom'
-import type { SubmissionListItem } from '../../types/academic'
+import type { SubmissionListItem, ActividadTipo, ActividadFlags } from '../../types/academic'
 
 interface Props {
   submissions: SubmissionListItem[]
   cursoId: string
   actividadId: string
   userRole: 'docente' | 'co_docente'
+  actividadTipo?: ActividadTipo
+  actividadFlags?: ActividadFlags
 }
 
-export function SubmissionTable({ submissions, cursoId, actividadId, userRole }: Props) {
+export function SubmissionTable({ submissions, cursoId, actividadId, userRole, actividadTipo, actividadFlags }: Props) {
   const navigate = useNavigate()
   const base = userRole === 'docente' ? 'docente' : 'codocente'
 
@@ -38,7 +40,7 @@ export function SubmissionTable({ submissions, cursoId, actividadId, userRole }:
               onClick={() =>
                 navigate(
                   `/${base}/cursos/${cursoId}/actividades/${actividadId}/submissions/${item.id}`,
-                  { state: item },
+                  { state: { item, actividadTipo, actividadFlags } },
                 )
               }
               className="border-b border-[#2e2e2e] cursor-pointer hover:bg-[#1a1a1a] transition-colors"

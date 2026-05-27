@@ -166,7 +166,7 @@ export function ActividadDetailPage() {
         {toggleError && <ErrorMessage message={toggleError} onDismiss={() => setToggleError(null)} />}
       </div>
 
-      {/* Ver Entregas / Ver Sesiones en Vivo */}
+      {/* Ver Entregas / Ver Sesiones en Vivo / Programar Defensas */}
       <div className="mb-6 flex flex-wrap gap-3">
         <Link
           to={`/docente/cursos/${cursoId}/actividades/${aid}/submissions`}
@@ -180,6 +180,14 @@ export function ActividadDetailPage() {
         >
           Ver Sesiones en Vivo
         </Link>
+        {actividad.tipo === 'defensa_oral' && (
+          <Link
+            to={`/docente/cursos/${cursoId}/actividades/${aid}/defensa-slots`}
+            className="inline-flex items-center gap-2 bg-[#1a1a1a] border border-[#2e2e2e] rounded-lg px-4 py-2 text-sm text-[#f0f0f0] hover:border-[#E85D24] transition-colors"
+          >
+            Programar Defensas
+          </Link>
+        )}
       </div>
 
       {/* Co-docente grants */}

@@ -30,6 +30,10 @@ import { LiveSessionFeedPage } from '../pages/docente/LiveSessionFeedPage'
 import { CodocenteTraceViewerPage } from '../pages/codocente/TraceViewerPage'
 import { CodocenteLiveSessionsPage } from '../pages/codocente/LiveSessionsPage'
 import { CodocenteLiveSessionFeedPage } from '../pages/codocente/LiveSessionFeedPage'
+import { DefensaSchedulingPage } from '../pages/docente/DefensaSchedulingPage'
+import { GitAnalysisPage } from '../pages/docente/GitAnalysisPage'
+import { AIReportPage } from '../pages/docente/AIReportPage'
+import { DetectionReportPage } from '../pages/docente/DetectionReportPage'
 
 export function roleHomeFor(role: Role): string {
   switch (role) {
@@ -97,6 +101,10 @@ const router = createBrowserRouter([
           { path: '/docente/cursos/:cid/actividades/:aid/sessions', element: <LiveSessionsPage /> },
           { path: '/docente/cursos/:cid/actividades/:aid/sessions/:sid/live', element: <LiveSessionFeedPage /> },
           { path: '/docente/cursos/:cid/actividades/:aid/submissions/:subid/trace', element: <TraceViewerPage /> },
+          { path: '/docente/cursos/:cid/actividades/:aid/defensa-slots', element: <DefensaSchedulingPage /> },
+          { path: '/docente/cursos/:cid/actividades/:aid/submissions/:subid/git-analysis', element: <GitAnalysisPage /> },
+          { path: '/docente/cursos/:cid/actividades/:aid/submissions/:subid/ai-report', element: <AIReportPage /> },
+          { path: '/docente/cursos/:cid/actividades/:aid/submissions/:subid/detection-report', element: <DetectionReportPage /> },
         ],
       },
     ],
@@ -113,6 +121,9 @@ const router = createBrowserRouter([
           { path: '/codocente/cursos/:cid/actividades/:aid/sessions', element: <CodocenteLiveSessionsPage /> },
           { path: '/codocente/cursos/:cid/actividades/:aid/sessions/:sid/live', element: <CodocenteLiveSessionFeedPage /> },
           { path: '/codocente/cursos/:cid/actividades/:aid/submissions/:subid/trace', element: <CodocenteTraceViewerPage /> },
+          { path: '/codocente/cursos/:cid/actividades/:aid/submissions/:subid/git-analysis', element: <GitAnalysisPage /> },
+          { path: '/codocente/cursos/:cid/actividades/:aid/submissions/:subid/ai-report', element: <AIReportPage /> },
+          { path: '/codocente/cursos/:cid/actividades/:aid/submissions/:subid/detection-report', element: <DetectionReportPage /> },
         ],
       },
     ],
