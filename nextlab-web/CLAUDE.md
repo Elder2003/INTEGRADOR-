@@ -4,7 +4,7 @@ For additional context about the project plan, constitution, and implementation
 details, read the current milestone plan at:
 
 <!-- SPECKIT START -->
-`specs/005-mw5-file-submissions/plan.md`
+`specs/007-mw7-grading/plan.md`
 <!-- SPECKIT END -->
 
 ## Key files

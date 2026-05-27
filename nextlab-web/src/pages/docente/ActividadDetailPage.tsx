@@ -166,13 +166,19 @@ export function ActividadDetailPage() {
         {toggleError && <ErrorMessage message={toggleError} onDismiss={() => setToggleError(null)} />}
       </div>
 
-      {/* Ver Entregas */}
-      <div className="mb-6">
+      {/* Ver Entregas / Ver Sesiones en Vivo */}
+      <div className="mb-6 flex flex-wrap gap-3">
         <Link
           to={`/docente/cursos/${cursoId}/actividades/${aid}/submissions`}
           className="inline-flex items-center gap-2 bg-[#1a1a1a] border border-[#2e2e2e] rounded-lg px-4 py-2 text-sm text-[#f0f0f0] hover:border-[#E85D24] transition-colors"
         >
           Ver Entregas
+        </Link>
+        <Link
+          to={`/docente/cursos/${cursoId}/actividades/${aid}/sessions`}
+          className="inline-flex items-center gap-2 bg-[#1a1a1a] border border-[#2e2e2e] rounded-lg px-4 py-2 text-sm text-[#f0f0f0] hover:border-[#E85D24] transition-colors"
+        >
+          Ver Sesiones en Vivo
         </Link>
       </div>
 

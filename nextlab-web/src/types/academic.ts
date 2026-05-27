@@ -182,6 +182,7 @@ export interface SubmissionListItem {
   is_locked: boolean
   last_replaced_at: string | null
   edit_window_expires_at: string | null
+  session_id: string | null
 }
 
 export interface SubmissionListResponse {
@@ -232,4 +233,38 @@ export interface StudentActividadEntry {
   trace_enabled: boolean
   posted_at: string
   last_edited_at: string
+}
+
+export interface SessionResponse {
+  id: string
+  actividad_id: string
+  student_id: string
+  started_at: string
+  ended_at: string | null
+}
+
+export interface TraceLogEntry {
+  id: string
+  session_id: string
+  type: 'keystroke' | 'copy' | 'paste' | 'focus_in' | 'focus_out'
+  timestamp: string
+  content: string | null
+}
+
+export interface TraceLogResponse {
+  session_id: string
+  events: TraceLogEntry[]
+  total: number
+}
+
+export interface ActiveSessionEntry {
+  session_id: string
+  student: StudentInfo
+  started_at: string
+  event_count: number
+}
+
+export interface ActiveSessionsResponse {
+  actividad_id: string
+  sessions: ActiveSessionEntry[]
 }

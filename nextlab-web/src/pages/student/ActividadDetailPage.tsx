@@ -14,6 +14,8 @@ import { ErrorMessage } from '../../components/common/ErrorMessage'
 import { ConfirmModal } from '../../components/common/ConfirmModal'
 import { FileUpload } from '../../components/student/FileUpload'
 import { IntegrityDeclaration } from '../../components/student/IntegrityDeclaration'
+import { SessionPanel } from '../../components/student/SessionPanel'
+import { useTracingSession } from '../../hooks/useTracingSession'
 
 const tipoLabel: Record<string, string> = {
   practica: 'Práctica',
@@ -75,6 +77,11 @@ export function ActividadDetailPage() {
   // Delete state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
+  // Session state
+  const [showEndConfirm, setShowEndConfirm] = useState(false)
+  const { status: sessionStatus, startTime: sessionStartTime, startSession, terminateSession } =
+    useTracingSession(aid ?? '', actividad?.trace_enabled ?? false)
 
   useEffect(() => {
     if (!cursoId || !aid) return
@@ -203,6 +210,18 @@ export function ActividadDetailPage() {
         <pre className="whitespace-pre-wrap text-[#f0f0f0] text-sm">{actividad.instructions}</pre>
       </div>
 
+      {actividad.trace_enabled && (
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold text-[#f0f0f0]">Sesión de monitoreo</h2>
+          <SessionPanel
+            status={sessionStatus}
+            startTime={sessionStartTime}
+            onStart={startSession}
+            onEnd={() => setShowEndConfirm(true)}
+          />
+        </div>
+      )}
+
       {/* Submission section */}
       <div>
         <h2 className="text-lg font-semibold text-[#f0f0f0] mb-4">Mi Entrega</h2>
@@ -212,40 +231,46 @@ export function ActividadDetailPage() {
         {!submLoading && submError && <ErrorMessage message={submError} />}
 
         {!submLoading && !submError && submission === null && (
-          <div className="space-y-4">
-            <IntegrityDeclaration checked={integrityChecked} onChange={setIntegrityChecked} />
-            <FileUpload
-              acceptedTypes={[]}
-              acceptedLabels={['Cualquier formato']}
-              onFileSelect={(f) => {
-                if (f.size > 52_428_800) {
-                  setUploadError('El archivo supera el límite de 50 MB.')
-                  return
-                }
-                setSelectedFile(f)
-                setUploadError(null)
-              }}
-              selectedFile={selectedFile}
-              onClear={() => setSelectedFile(null)}
-            />
-            {uploadError && <p className="text-red-400 text-sm">{uploadError}</p>}
-            {uploading && (
-              <div className="w-full bg-[#2e2e2e] rounded-full h-1.5">
-                <div
-                  className="bg-[#E85D24] h-1.5 rounded-full transition-all"
-                  style={{ width: `${uploadProgress}%` }}
-                />
-              </div>
-            )}
-            <button
-              type="button"
-              onClick={handleUpload}
-              disabled={!integrityChecked || !selectedFile || uploading}
-              className="px-4 py-2 bg-[#E85D24] text-white text-sm rounded-lg hover:bg-[#d4521f] disabled:opacity-50 transition-colors"
-            >
-              {uploading ? 'Subiendo...' : 'Subir entrega'}
-            </button>
-          </div>
+          actividad.trace_enabled && sessionStatus !== 'active' ? (
+            <p className="text-[#888888] text-sm">
+              Inicia la sesión de monitoreo para poder subir tu entrega.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              <IntegrityDeclaration checked={integrityChecked} onChange={setIntegrityChecked} />
+              <FileUpload
+                acceptedTypes={[]}
+                acceptedLabels={['Cualquier formato']}
+                onFileSelect={(f) => {
+                  if (f.size > 52_428_800) {
+                    setUploadError('El archivo supera el límite de 50 MB.')
+                    return
+                  }
+                  setSelectedFile(f)
+                  setUploadError(null)
+                }}
+                selectedFile={selectedFile}
+                onClear={() => setSelectedFile(null)}
+              />
+              {uploadError && <p className="text-red-400 text-sm">{uploadError}</p>}
+              {uploading && (
+                <div className="w-full bg-[#2e2e2e] rounded-full h-1.5">
+                  <div
+                    className="bg-[#E85D24] h-1.5 rounded-full transition-all"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={handleUpload}
+                disabled={!integrityChecked || !selectedFile || uploading}
+                className="px-4 py-2 bg-[#E85D24] text-white text-sm rounded-lg hover:bg-[#d4521f] disabled:opacity-50 transition-colors"
+              >
+                {uploading ? 'Subiendo...' : 'Subir entrega'}
+              </button>
+            </div>
+          )
         )}
 
         {!submLoading && !submError && submission !== null && (
@@ -367,6 +392,16 @@ export function ActividadDetailPage() {
         isLoading={deleting}
         onConfirm={handleDelete}
         onCancel={() => setShowDeleteConfirm(false)}
+      />
+
+      <ConfirmModal
+        isOpen={showEndConfirm}
+        title="Terminar sesión"
+        message="¿Seguro que deseas terminar la sesión de monitoreo?"
+        confirmLabel="Terminar"
+        isLoading={false}
+        onConfirm={() => { terminateSession(); setShowEndConfirm(false) }}
+        onCancel={() => setShowEndConfirm(false)}
       />
     </div>
   )

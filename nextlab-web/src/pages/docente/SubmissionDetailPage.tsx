@@ -104,14 +104,25 @@ export function SubmissionDetailPage() {
 
       {downloadError && <ErrorMessage message={downloadError} />}
 
-      <button
-        type="button"
-        onClick={handleDownload}
-        disabled={downloading}
-        className="bg-[#E85D24] hover:bg-[#d4521f] text-white px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
-      >
-        {downloading ? 'Descargando...' : 'Descargar'}
-      </button>
+      <div className="flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={handleDownload}
+          disabled={downloading}
+          className="bg-[#E85D24] hover:bg-[#d4521f] text-white px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-50"
+        >
+          {downloading ? 'Descargando...' : 'Descargar'}
+        </button>
+
+        {item.session_id && (
+          <Link
+            to={`${location.pathname}/trace`}
+            className="inline-flex items-center gap-2 bg-[#1a1a1a] border border-[#2e2e2e] rounded-lg px-4 py-2 text-sm text-[#f0f0f0] hover:border-[#E85D24] transition-colors"
+          >
+            Ver trazas
+          </Link>
+        )}
+      </div>
     </div>
   )
 }

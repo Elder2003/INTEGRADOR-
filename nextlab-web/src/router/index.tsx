@@ -24,6 +24,12 @@ import { CarrerasPage } from '../pages/admin/CarrerasPage'
 import { MateriasPage } from '../pages/admin/MateriasPage'
 import { StudentProfilesPage } from '../pages/admin/StudentProfilesPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
+import { TraceViewerPage } from '../pages/docente/TraceViewerPage'
+import { LiveSessionsPage } from '../pages/docente/LiveSessionsPage'
+import { LiveSessionFeedPage } from '../pages/docente/LiveSessionFeedPage'
+import { CodocenteTraceViewerPage } from '../pages/codocente/TraceViewerPage'
+import { CodocenteLiveSessionsPage } from '../pages/codocente/LiveSessionsPage'
+import { CodocenteLiveSessionFeedPage } from '../pages/codocente/LiveSessionFeedPage'
 
 export function roleHomeFor(role: Role): string {
   switch (role) {
@@ -88,6 +94,9 @@ const router = createBrowserRouter([
           { path: '/docente/cursos/:id/actividades/:aid/edit', element: <EditActividadPage /> },
           { path: '/docente/cursos/:cid/actividades/:aid/submissions', element: <SubmissionsPage /> },
           { path: '/docente/cursos/:cid/actividades/:aid/submissions/:sid', element: <SubmissionDetailPage /> },
+          { path: '/docente/cursos/:cid/actividades/:aid/sessions', element: <LiveSessionsPage /> },
+          { path: '/docente/cursos/:cid/actividades/:aid/sessions/:sid/live', element: <LiveSessionFeedPage /> },
+          { path: '/docente/cursos/:cid/actividades/:aid/submissions/:subid/trace', element: <TraceViewerPage /> },
         ],
       },
     ],
@@ -101,6 +110,9 @@ const router = createBrowserRouter([
           { path: '/codocente/dashboard', element: <CodocenteDashboard /> },
           { path: '/codocente/cursos/:cid/actividades/:aid/submissions', element: <CodocenteSubmissionsPage /> },
           { path: '/codocente/cursos/:cid/actividades/:aid/submissions/:sid', element: <SubmissionDetailPage /> },
+          { path: '/codocente/cursos/:cid/actividades/:aid/sessions', element: <CodocenteLiveSessionsPage /> },
+          { path: '/codocente/cursos/:cid/actividades/:aid/sessions/:sid/live', element: <CodocenteLiveSessionFeedPage /> },
+          { path: '/codocente/cursos/:cid/actividades/:aid/submissions/:subid/trace', element: <CodocenteTraceViewerPage /> },
         ],
       },
     ],
