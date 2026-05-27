@@ -66,7 +66,7 @@ export function CreateCursoPage() {
             >
               <option value="" disabled>Seleccionar materia</option>
               {materias.map(m => (
-                <option key={m.id} value={m.id}>{m.nombre} ({m.codigo})</option>
+                <option key={m.id} value={m.id}>{m.name} ({m.code})</option>
               ))}
             </select>
           ) : (

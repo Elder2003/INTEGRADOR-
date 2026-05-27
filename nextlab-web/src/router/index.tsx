@@ -6,6 +6,8 @@ import { ProtectedRoute } from '../components/common/ProtectedRoute'
 import { Layout } from '../components/common/Layout'
 import { LoginPage } from '../pages/auth/LoginPage'
 import { DashboardPage as StudentDashboard } from '../pages/student/DashboardPage'
+import { ActividadesPage } from '../pages/student/ActividadesPage'
+import { ActividadDetailPage as StudentActividadDetailPage } from '../pages/student/ActividadDetailPage'
 import { DashboardPage as DocenteDashboard } from '../pages/docente/DashboardPage'
 import { CreateCursoPage } from '../pages/docente/CreateCursoPage'
 import { EditCursoPage } from '../pages/docente/EditCursoPage'
@@ -15,6 +17,9 @@ import { EditActividadPage } from '../pages/docente/EditActividadPage'
 import { ActividadDetailPage } from '../pages/docente/ActividadDetailPage'
 import { DashboardPage as CodocenteDashboard } from '../pages/codocente/DashboardPage'
 import { DashboardPage as AdminDashboard } from '../pages/admin/DashboardPage'
+import { CarrerasPage } from '../pages/admin/CarrerasPage'
+import { MateriasPage } from '../pages/admin/MateriasPage'
+import { StudentProfilesPage } from '../pages/admin/StudentProfilesPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 
 export function roleHomeFor(role: Role): string {
@@ -58,6 +63,8 @@ const router = createBrowserRouter([
         element: <Layout />,
         children: [
           { path: '/student/dashboard', element: <StudentDashboard /> },
+          { path: '/student/cursos/:id/actividades', element: <ActividadesPage /> },
+          { path: '/student/cursos/:id/actividades/:aid', element: <StudentActividadDetailPage /> },
         ],
       },
     ],
@@ -98,6 +105,9 @@ const router = createBrowserRouter([
         element: <Layout />,
         children: [
           { path: '/admin/dashboard', element: <AdminDashboard /> },
+          { path: '/admin/carreras', element: <CarrerasPage /> },
+          { path: '/admin/materias', element: <MateriasPage /> },
+          { path: '/admin/student-profiles', element: <StudentProfilesPage /> },
         ],
       },
     ],
