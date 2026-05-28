@@ -27,14 +27,16 @@ import type { Appeal } from '../../types/academic'
 
 const APPEAL_STATUS_LABEL: Record<string, string> = {
   pending: 'Pendiente',
-  accepted: 'Aceptada',
-  rejected: 'Rechazada',
+  escalated: 'Derivada al administrador',
+  resolved: 'Resuelta',
+  admin_resolved: 'Resuelta por administrador',
 }
 
 const APPEAL_STATUS_CLASS: Record<string, string> = {
   pending: 'bg-yellow-400/10 text-yellow-400',
-  accepted: 'bg-green-400/10 text-green-400',
-  rejected: 'bg-red-400/10 text-red-400',
+  escalated: 'bg-blue-400/10 text-blue-400',
+  resolved: 'bg-green-400/10 text-green-400',
+  admin_resolved: 'bg-green-400/10 text-green-400',
 }
 
 const tipoLabel: Record<string, string> = {
@@ -110,7 +112,7 @@ export function ActividadDetailPage() {
   const [appeal, setAppeal] = useState<Appeal | null>(null)
   const [appealLoading, setAppealLoading] = useState(false)
   const [showAppealForm, setShowAppealForm] = useState(false)
-  const [appealMessage, setAppealMessage] = useState('')
+  const [appealReason, setAppealReason] = useState('')
   const [appealSubmitError, setAppealSubmitError] = useState<string | null>(null)
   const [appealSubmitting, setAppealSubmitting] = useState(false)
 
@@ -150,9 +152,9 @@ export function ActividadDetailPage() {
   }, [aid, actividad])
 
   useEffect(() => {
-    if (!submission || !submission.grade) return
+    if (!submission?.session_id || !submission.grade) return
     setAppealLoading(true)
-    getAppeal(submission.id)
+    getAppeal(submission.session_id)
       .then(setAppeal)
       .catch(() => {})
       .finally(() => setAppealLoading(false))
@@ -462,7 +464,7 @@ export function ActividadDetailPage() {
         <GradeDisplay grade={submission?.grade ?? null} hasSubmission={submission !== null} />
       </div>
 
-      {submission !== null && submission.grade !== null && !appealLoading && (
+      {submission !== null && submission.session_id !== null && submission.grade !== null && !appealLoading && (
         <div className="border-t border-[#2e2e2e] pt-4 mt-4">
           <h2 className="text-base font-semibold text-[#f0f0f0] mb-3">Apelación</h2>
           {appeal === null && !showAppealForm && (
@@ -477,8 +479,8 @@ export function ActividadDetailPage() {
           {showAppealForm && (
             <div className="space-y-3">
               <textarea
-                value={appealMessage}
-                onChange={(e) => setAppealMessage(e.target.value)}
+                value={appealReason}
+                onChange={(e) => setAppealReason(e.target.value)}
                 placeholder="Explica el motivo de tu apelación..."
                 rows={4}
                 className="w-full bg-[#1a1a1a] border border-[#2e2e2e] rounded-lg p-3 text-[#f0f0f0] text-sm placeholder-[#888888] focus:outline-none focus:border-[#E85D24]"
@@ -489,17 +491,17 @@ export function ActividadDetailPage() {
                   type="button"
                   disabled={appealSubmitting}
                   onClick={async () => {
-                    if (!appealMessage.trim()) {
+                    if (!appealReason.trim()) {
                       setAppealSubmitError('La explicación no puede estar vacía.')
                       return
                     }
                     setAppealSubmitError(null)
                     setAppealSubmitting(true)
                     try {
-                      const result = await createAppeal(submission.id, appealMessage.trim())
+                      const result = await createAppeal(submission.session_id!, appealReason.trim())
                       setAppeal(result)
                       setShowAppealForm(false)
-                      setAppealMessage('')
+                      setAppealReason('')
                     } catch (err: unknown) {
                       setAppealSubmitError((err as Error).message)
                     } finally {
@@ -512,7 +514,7 @@ export function ActividadDetailPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setShowAppealForm(false); setAppealMessage(''); setAppealSubmitError(null) }}
+                  onClick={() => { setShowAppealForm(false); setAppealReason(''); setAppealSubmitError(null) }}
                   className="px-4 py-2 text-sm border border-[#2e2e2e] text-[#f0f0f0] rounded-lg hover:border-[#888888] transition-colors"
                 >
                   Cancelar
@@ -521,21 +523,20 @@ export function ActividadDetailPage() {
             </div>
           )}
           {appeal !== null && (
-              <div className="bg-[#1a1a1a] border border-[#2e2e2e] rounded-lg p-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-0.5 rounded ${APPEAL_STATUS_CLASS[appeal.status] ?? 'bg-[#2e2e2e] text-[#888888]'}`}>
-                    {APPEAL_STATUS_LABEL[appeal.status] ?? appeal.status}
-                  </span>
-                  <span className="text-xs text-[#888888]">{formatDateTime(appeal.created_at)}</span>
-                </div>
-                <p className="text-sm text-[#f0f0f0]">{appeal.student_message}</p>
-                {appeal.docente_response && (
-                  <div className="border-t border-[#2e2e2e] pt-3">
-                    <p className="text-xs text-[#888888] mb-1">Respuesta del docente:</p>
-                    <p className="text-sm text-[#f0f0f0]">{appeal.docente_response}</p>
-                  </div>
-                )}
+            <div className="bg-[#1a1a1a] border border-[#2e2e2e] rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <span className={`text-xs px-2 py-0.5 rounded ${APPEAL_STATUS_CLASS[appeal.status] ?? 'bg-[#2e2e2e] text-[#888888]'}`}>
+                  {APPEAL_STATUS_LABEL[appeal.status] ?? appeal.status}
+                </span>
+                <span className="text-xs text-[#888888]">{formatDateTime(appeal.created_at)}</span>
               </div>
+              <p className="text-sm text-[#f0f0f0]">{appeal.reason}</p>
+              {appeal.status === 'escalated' && (
+                <p className="text-xs text-[#888888]">
+                  La apelación está siendo revisada por el administrador.
+                </p>
+              )}
+            </div>
           )}
         </div>
       )}

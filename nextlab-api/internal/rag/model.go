@@ -95,6 +95,24 @@ type CurricularQueryRequest struct {
 	ActividadID   *uuid.UUID
 }
 
+type SolveProblemRequest struct {
+	Problem string `json:"problem"`
+}
+
+type MateriaSuggestion struct {
+	CodigoMateria  string  `json:"codigo_materia"`
+	Carrera        string  `json:"carrera"`
+	Semestre       int     `json:"semestre"`
+	RelevanceScore float32 `json:"relevance_score"`
+	Excerpt        string  `json:"excerpt"`
+}
+
+type SolveProblemResponse struct {
+	Problem    string              `json:"problem"`
+	Suggestion string              `json:"suggestion"`
+	Materias   []MateriaSuggestion `json:"materias"`
+}
+
 type DocenteQueryRequest struct {
 	DocenteID   uuid.UUID
 	CursoID     uuid.UUID

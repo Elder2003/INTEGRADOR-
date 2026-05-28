@@ -8,9 +8,10 @@ interface Props {
   userRole: 'docente' | 'co_docente'
   actividadTipo?: ActividadTipo
   actividadFlags?: ActividadFlags
+  pendingAppealSessionIds?: Set<string>
 }
 
-export function SubmissionTable({ submissions, cursoId, actividadId, userRole, actividadTipo, actividadFlags }: Props) {
+export function SubmissionTable({ submissions, cursoId, actividadId, userRole, actividadTipo, actividadFlags, pendingAppealSessionIds }: Props) {
   const navigate = useNavigate()
   const base = userRole === 'docente' ? 'docente' : 'codocente'
 
@@ -31,7 +32,9 @@ export function SubmissionTable({ submissions, cursoId, actividadId, userRole, a
             <th className="pb-2 pr-4 text-[#888888] font-medium">Tamaño</th>
             <th className="pb-2 pr-4 text-[#888888] font-medium">Enviado</th>
             <th className="pb-2 pr-4 text-[#888888] font-medium">Estado</th>
-            <th className="pb-2 text-[#888888] font-medium">Apelación</th>
+            {pendingAppealSessionIds && (
+              <th className="pb-2 text-[#888888] font-medium">Apelación</th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -71,13 +74,15 @@ export function SubmissionTable({ submissions, cursoId, actividadId, userRole, a
                   )}
                 </div>
               </td>
-              <td className="py-3">
-                {item.appeal_status === 'pending' && (
-                  <span className="bg-[#E85D24]/10 text-[#E85D24] text-xs px-2 py-0.5 rounded">
-                    Pendiente
-                  </span>
-                )}
-              </td>
+              {pendingAppealSessionIds && (
+                <td className="py-3">
+                  {item.session_id && pendingAppealSessionIds.has(item.session_id) && (
+                    <span className="bg-[#E85D24]/10 text-[#E85D24] text-xs px-2 py-0.5 rounded">
+                      Pendiente
+                    </span>
+                  )}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

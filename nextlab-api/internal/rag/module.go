@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/minio/minio-go/v7"
 
+	"github.com/Elder2003/nextlab-api/internal/ai"
 	"github.com/Elder2003/nextlab-api/internal/config"
 )
 
@@ -18,6 +19,7 @@ func RegisterRoutes(
 	cfg *config.Config,
 	authMW fiber.Handler,
 	roleGuard func(roles ...string) fiber.Handler,
+	aiSvc *ai.Service,
 ) {
 	// Ensure rag-docs bucket exists
 	ctx := context.Background()
@@ -42,6 +44,7 @@ func RegisterRoutes(
 	curr := app.Group("/rag/curricular", authMW)
 	curr.Post("/ingest", roleGuard("admin"), ingestCurricularHandler(ingestSvc))
 	curr.Post("/query", retrieveCurricularHandler(retrieveSvc))
+	curr.Post("/solve", roleGuard("admin"), solveProblemHandler(curRepo, embedClient, aiSvc))
 
 	// Docente RAG
 	doc := app.Group("/rag/docente", authMW, roleGuard("docente"))

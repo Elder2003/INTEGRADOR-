@@ -23,6 +23,8 @@ import { DashboardPage as AdminDashboard } from '../pages/admin/DashboardPage'
 import { CarrerasPage } from '../pages/admin/CarrerasPage'
 import { MateriasPage } from '../pages/admin/MateriasPage'
 import { StudentProfilesPage } from '../pages/admin/StudentProfilesPage'
+import { ProblematicaPage } from '../pages/admin/ProblematicaPage'
+import { CurriculumPage } from '../pages/admin/CurriculumPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 import { TraceViewerPage } from '../pages/docente/TraceViewerPage'
 import { LiveSessionsPage } from '../pages/docente/LiveSessionsPage'
@@ -145,6 +147,8 @@ const router = createBrowserRouter([
           { path: '/admin/carreras', element: <CarrerasPage /> },
           { path: '/admin/materias', element: <MateriasPage /> },
           { path: '/admin/student-profiles', element: <StudentProfilesPage /> },
+          { path: '/admin/problematica', element: <ProblematicaPage /> },
+          { path: '/admin/curriculum', element: <CurriculumPage /> },
         ],
       },
     ],

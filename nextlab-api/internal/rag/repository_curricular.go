@@ -144,6 +144,27 @@ func (r *CurricularRepository) QuerySimilar(ctx context.Context, carrera string,
 	return scanCurricularChunksWithScore(rows)
 }
 
+// QuerySimilarAll returns the top-N most similar active non-rubric chunks across ALL materias.
+func (r *CurricularRepository) QuerySimilarAll(ctx context.Context, queryVec string, limit int) ([]ChunkResult, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT c.document_id, c.chunk_index, c.chunk_text,
+		       1 - (c.embedding <=> $1::vector) AS similarity_score,
+		       d.carrera, d.semestre, d.codigo_materia
+		FROM rag_curricular_chunks c
+		JOIN rag_curricular d ON d.id = c.document_id
+		WHERE d.is_rubric=FALSE AND c.status='active'
+		  AND c.embedding IS NOT NULL
+		ORDER BY c.embedding <=> $1::vector
+		LIMIT $2`,
+		queryVec, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanCurricularChunksWithScore(rows)
+}
+
 func (r *CurricularRepository) DeleteDocument(ctx context.Context, id uuid.UUID) (string, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {

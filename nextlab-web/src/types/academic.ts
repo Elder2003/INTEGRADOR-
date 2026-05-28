@@ -158,6 +158,7 @@ export interface UpdateGrupoRequest {
 export interface SubmissionResponse {
   id: string
   actividad_id: string
+  session_id: string | null
   original_filename: string
   file_size_bytes: number
   mime_type: string
@@ -193,7 +194,6 @@ export interface SubmissionListItem {
   grade: GradeDecision | null
   stage: InvestigaciónStage | null
   repo_url: string | null
-  appeal_status: AppealStatus | null
 }
 
 export interface SubmissionListResponse {
@@ -406,25 +406,37 @@ export interface CourseAnalytics {
   overall_grade_distribution: GradeDistributionBucket[]
 }
 
-// MW10 — Appeals types
+// MW10 — Appeals types (M13 contract)
 
-export type AppealStatus = 'pending' | 'accepted' | 'rejected'
+export type AppealStatus = 'pending' | 'escalated' | 'resolved' | 'admin_resolved'
 
 export interface Appeal {
   id: string
-  submission_id: string
-  student_message: string
+  session_id: string
+  filed_by: string
+  type: string
   status: AppealStatus
-  docente_response: string | null
+  reason: string
   created_at: string
-  resolved_at: string | null
 }
 
-export interface CreateAppealRequest {
-  student_message: string
+export interface AppealDecision {
+  id: string
+  appeal_id: string
+  decided_by: string
+  role: string
+  decision: 'upheld' | 'rejected' | 'overridden'
+  justification: string
+  decided_at: string
 }
 
-export interface ResolveAppealRequest {
-  decision: 'accept' | 'reject'
-  response_note: string
+export interface FileAppealRequest {
+  session_id: string
+  type: string
+  reason: string
+}
+
+export interface ReviewRequest {
+  decision: 'upheld' | 'rejected'
+  justification: string
 }

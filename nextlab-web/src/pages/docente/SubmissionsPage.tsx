@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { listSubmissions, listConfigChanges } from '../../api/submissions'
 import { getActividad } from '../../api/academic'
+import { listActivityAppeals } from '../../api/appeals'
 import type { SubmissionListResponse, ConfigChangesResponse, Actividad, ActividadFlags } from '../../types/academic'
 import { LoadingSpinner } from '../../components/common/LoadingSpinner'
 import { ErrorMessage } from '../../components/common/ErrorMessage'
@@ -12,16 +13,26 @@ export function SubmissionsPage() {
   const [data, setData] = useState<SubmissionListResponse | null>(null)
   const [changes, setChanges] = useState<ConfigChangesResponse | null>(null)
   const [actividad, setActividad] = useState<Actividad | null>(null)
+  const [pendingAppealSessionIds, setPendingAppealSessionIds] = useState<Set<string> | undefined>(undefined)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!cid || !aid) return
-    Promise.all([listSubmissions(cid, aid), listConfigChanges(cid, aid), getActividad(aid)])
-      .then(([submData, changesData, actData]) => {
+    Promise.all([
+      listSubmissions(cid, aid),
+      listConfigChanges(cid, aid),
+      getActividad(aid),
+      listActivityAppeals(aid).catch(() => []),
+    ])
+      .then(([submData, changesData, actData, appeals]) => {
         setData(submData)
         setChanges(changesData)
         setActividad(actData)
+        const pending = new Set(
+          appeals.filter((a) => a.status === 'pending').map((a) => a.session_id),
+        )
+        setPendingAppealSessionIds(pending)
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false))
@@ -56,6 +67,7 @@ export function SubmissionsPage() {
               ai_enabled: actividad.ai_enabled,
               detection_enabled: actividad.detection_enabled,
             } satisfies ActividadFlags) : undefined}
+            pendingAppealSessionIds={pendingAppealSessionIds}
           />
         </div>
       )}

@@ -4,6 +4,8 @@ const NAV_CARDS = [
   { to: '/admin/carreras', title: 'Carreras', description: 'Gestionar carreras académicas' },
   { to: '/admin/materias', title: 'Materias', description: 'Gestionar materias por carrera' },
   { to: '/admin/student-profiles', title: 'Perfiles de Estudiantes', description: 'Gestionar perfiles y accesos de estudiantes' },
+  { to: '/admin/problematica', title: 'Resolver Problemáticas', description: 'Consultar al currículo con IA para encontrar materias que aborden un problema' },
+  { to: '/admin/curriculum', title: 'Currículo', description: 'Subir y gestionar documentos curriculares para la base de conocimiento de IA' },
 ]
 
 export function DashboardPage() {

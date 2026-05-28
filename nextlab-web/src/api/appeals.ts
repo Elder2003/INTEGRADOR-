@@ -1,7 +1,7 @@
 import api from '../lib/api'
 import { ApiError } from '../types'
 import type { AxiosError } from 'axios'
-import type { Appeal } from '../types/academic'
+import type { Appeal, AppealDecision } from '../types/academic'
 
 interface ApiErrorBody {
   error: string
@@ -20,37 +20,58 @@ function toApiError(err: unknown): never {
   throw new ApiError('An unexpected error occurred', 'unknown_error')
 }
 
-export async function getAppeal(submissionId: string): Promise<Appeal | null> {
+interface AppealsListResponse {
+  appeals: Appeal[]
+  total: number
+}
+
+export interface ReviewResponse {
+  appeal: Appeal
+  decision: AppealDecision | null
+}
+
+export async function getAppeal(sessionId: string): Promise<Appeal | null> {
   try {
-    const res = await api.get<Appeal>(`/submissions/${submissionId}/appeal`)
-    return res.data
+    const res = await api.get<AppealsListResponse>('/appeals', { params: { session_id: sessionId } })
+    return res.data.appeals[0] ?? null
   } catch (err) {
-    const axiosErr = err as AxiosError
-    if (axiosErr.response?.status === 404) return null
     toApiError(err)
   }
 }
 
-export async function createAppeal(submissionId: string, student_message: string): Promise<Appeal> {
+export async function createAppeal(sessionId: string, reason: string): Promise<Appeal> {
   try {
-    const res = await api.post<Appeal>(`/submissions/${submissionId}/appeal`, { student_message })
-    return res.data
-  } catch (err) {
-    toApiError(err)
-  }
-}
-
-export async function resolveAppeal(
-  submissionId: string,
-  decision: 'accept' | 'reject',
-  response_note: string,
-): Promise<Appeal> {
-  try {
-    const res = await api.post<Appeal>(`/submissions/${submissionId}/appeal/resolve`, {
-      decision,
-      response_note,
+    const res = await api.post<Appeal>('/appeals', {
+      session_id: sessionId,
+      type: 'grade_dispute',
+      reason,
     })
     return res.data
+  } catch (err) {
+    toApiError(err)
+  }
+}
+
+export async function reviewAppeal(
+  appealId: string,
+  decision: 'upheld' | 'rejected',
+  justification: string,
+): Promise<ReviewResponse> {
+  try {
+    const res = await api.put<ReviewResponse>(`/appeals/${appealId}/review`, {
+      decision,
+      justification,
+    })
+    return res.data
+  } catch (err) {
+    toApiError(err)
+  }
+}
+
+export async function listActivityAppeals(actividadId: string): Promise<Appeal[]> {
+  try {
+    const res = await api.get<AppealsListResponse>(`/actividades/${actividadId}/appeals`)
+    return res.data.appeals
   } catch (err) {
     toApiError(err)
   }

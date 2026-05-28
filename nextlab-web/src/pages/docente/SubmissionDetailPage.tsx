@@ -6,8 +6,8 @@ import { ErrorMessage } from '../../components/common/ErrorMessage'
 import { useAuth } from '../../context/AuthContext'
 import { GradePanel } from '../../components/docente/GradePanel'
 import { StageSelector } from '../../components/docente/StageSelector'
-import { getAppeal, resolveAppeal } from '../../api/appeals'
-import type { Appeal } from '../../types/academic'
+import { getAppeal, reviewAppeal } from '../../api/appeals'
+import type { Appeal, AppealDecision } from '../../types/academic'
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString('es-BO', {
@@ -21,14 +21,16 @@ function formatDateTime(iso: string): string {
 
 const APPEAL_STATUS_LABEL: Record<string, string> = {
   pending: 'Pendiente',
-  accepted: 'Aceptada',
-  rejected: 'Rechazada',
+  escalated: 'Derivada al administrador',
+  resolved: 'Resuelta',
+  admin_resolved: 'Resuelta por administrador',
 }
 
 const APPEAL_STATUS_CLASS: Record<string, string> = {
   pending: 'bg-yellow-400/10 text-yellow-400',
-  accepted: 'bg-green-400/10 text-green-400',
-  rejected: 'bg-red-400/10 text-red-400',
+  escalated: 'bg-blue-400/10 text-blue-400',
+  resolved: 'bg-green-400/10 text-green-400',
+  admin_resolved: 'bg-green-400/10 text-green-400',
 }
 
 export function SubmissionDetailPage() {
@@ -50,22 +52,23 @@ export function SubmissionDetailPage() {
 
   // Appeal state
   const [appeal, setAppeal] = useState<Appeal | null>(null)
+  const [appealDecision, setAppealDecision] = useState<AppealDecision | null>(null)
   const [appealLoading, setAppealLoading] = useState(false)
   const [appealError, setAppealError] = useState<string | null>(null)
   const [showResolveForm, setShowResolveForm] = useState(false)
-  const [resolveDecision, setResolveDecision] = useState<'accept' | 'reject'>('reject')
-  const [resolveNote, setResolveNote] = useState('')
+  const [resolveDecision, setResolveDecision] = useState<'upheld' | 'rejected'>('rejected')
+  const [justification, setJustification] = useState('')
   const [resolveError, setResolveError] = useState<string | null>(null)
   const [resolveSubmitting, setResolveSubmitting] = useState(false)
 
   useEffect(() => {
-    if (!sid) return
+    if (!item?.session_id) return
     setAppealLoading(true)
-    getAppeal(sid)
+    getAppeal(item.session_id)
       .then(setAppeal)
       .catch((err: Error) => setAppealError(err.message))
       .finally(() => setAppealLoading(false))
-  }, [sid])
+  }, [item?.session_id])
 
   async function handleDownload() {
     if (!sid || !item) return
@@ -174,14 +177,15 @@ export function SubmissionDetailPage() {
         />
       </div>
 
-      <div className="border-t border-[#2e2e2e] pt-4 mt-4">
-        <h2 className="text-base font-semibold text-[#f0f0f0] mb-3">Apelación</h2>
-        {appealLoading && <p className="text-[#888888] text-sm">Cargando apelación...</p>}
-        {appealError && <ErrorMessage message={appealError} />}
-        {!appealLoading && !appealError && appeal === null && (
-          <p className="text-[#888888] text-sm">Sin apelación.</p>
-        )}
-        {!appealLoading && !appealError && appeal !== null && (
+      {item.session_id && (
+        <div className="border-t border-[#2e2e2e] pt-4 mt-4">
+          <h2 className="text-base font-semibold text-[#f0f0f0] mb-3">Apelación</h2>
+          {appealLoading && <p className="text-[#888888] text-sm">Cargando apelación...</p>}
+          {appealError && <ErrorMessage message={appealError} />}
+          {!appealLoading && !appealError && appeal === null && (
+            <p className="text-[#888888] text-sm">Sin apelación.</p>
+          )}
+          {!appealLoading && !appealError && appeal !== null && (
             <div className="space-y-3">
               <div className="bg-[#1a1a1a] border border-[#2e2e2e] rounded-lg p-4 space-y-3">
                 <div className="flex items-center gap-2">
@@ -190,11 +194,16 @@ export function SubmissionDetailPage() {
                   </span>
                   <span className="text-xs text-[#888888]">{formatDateTime(appeal.created_at)}</span>
                 </div>
-                <p className="text-sm text-[#f0f0f0]">{appeal.student_message}</p>
-                {appeal.docente_response && (
+                <p className="text-sm text-[#f0f0f0]">{appeal.reason}</p>
+                {appeal.status === 'escalated' && (
+                  <p className="text-xs text-[#888888]">
+                    La apelación ha sido derivada al administrador para revisión final.
+                  </p>
+                )}
+                {appealDecision && (
                   <div className="border-t border-[#2e2e2e] pt-3">
-                    <p className="text-xs text-[#888888] mb-1">Tu respuesta:</p>
-                    <p className="text-sm text-[#f0f0f0]">{appeal.docente_response}</p>
+                    <p className="text-xs text-[#888888] mb-1">Tu evaluación registrada:</p>
+                    <p className="text-sm text-[#f0f0f0]">{appealDecision.justification}</p>
                   </div>
                 )}
               </div>
@@ -204,40 +213,40 @@ export function SubmissionDetailPage() {
                   onClick={() => setShowResolveForm(true)}
                   className="text-sm border border-[#2e2e2e] text-[#f0f0f0] px-4 py-2 rounded-lg hover:border-[#E85D24] transition-colors"
                 >
-                  Resolver apelación
+                  Evaluar apelación
                 </button>
               )}
               {showResolveForm && (
                 <div className="bg-[#1a1a1a] border border-[#2e2e2e] rounded-lg p-4 space-y-3">
-                  <p className="text-sm font-medium text-[#f0f0f0]">Decisión</p>
+                  <p className="text-sm font-medium text-[#f0f0f0]">Tu evaluación</p>
                   <div className="flex gap-4">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="radio"
                         name="resolve-decision"
-                        value="accept"
-                        checked={resolveDecision === 'accept'}
-                        onChange={() => setResolveDecision('accept')}
+                        value="upheld"
+                        checked={resolveDecision === 'upheld'}
+                        onChange={() => setResolveDecision('upheld')}
                         className="accent-[#E85D24]"
                       />
-                      <span className="text-sm text-[#f0f0f0]">Aceptar</span>
+                      <span className="text-sm text-[#f0f0f0]">La apelación tiene mérito</span>
                     </label>
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="radio"
                         name="resolve-decision"
-                        value="reject"
-                        checked={resolveDecision === 'reject'}
-                        onChange={() => setResolveDecision('reject')}
+                        value="rejected"
+                        checked={resolveDecision === 'rejected'}
+                        onChange={() => setResolveDecision('rejected')}
                         className="accent-[#E85D24]"
                       />
-                      <span className="text-sm text-[#f0f0f0]">Rechazar</span>
+                      <span className="text-sm text-[#f0f0f0]">Mantener calificación</span>
                     </label>
                   </div>
                   <textarea
-                    value={resolveNote}
-                    onChange={(e) => setResolveNote(e.target.value)}
-                    placeholder="Escribe tu respuesta al estudiante..."
+                    value={justification}
+                    onChange={(e) => setJustification(e.target.value)}
+                    placeholder="Justifica tu evaluación..."
                     rows={3}
                     className="w-full bg-[#111111] border border-[#2e2e2e] rounded-lg p-3 text-[#f0f0f0] text-sm placeholder-[#888888] focus:outline-none focus:border-[#E85D24]"
                   />
@@ -247,17 +256,18 @@ export function SubmissionDetailPage() {
                       type="button"
                       disabled={resolveSubmitting}
                       onClick={async () => {
-                        if (!resolveNote.trim()) {
-                          setResolveError('La respuesta no puede estar vacía.')
+                        if (!justification.trim()) {
+                          setResolveError('La justificación no puede estar vacía.')
                           return
                         }
                         setResolveError(null)
                         setResolveSubmitting(true)
                         try {
-                          const result = await resolveAppeal(sid!, resolveDecision, resolveNote.trim())
-                          setAppeal(result)
+                          const result = await reviewAppeal(appeal.id, resolveDecision, justification.trim())
+                          setAppeal(result.appeal)
+                          setAppealDecision(result.decision ?? null)
                           setShowResolveForm(false)
-                          setResolveNote('')
+                          setJustification('')
                         } catch (err: unknown) {
                           setResolveError((err as Error).message)
                         } finally {
@@ -270,7 +280,7 @@ export function SubmissionDetailPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setShowResolveForm(false); setResolveNote(''); setResolveError(null) }}
+                      onClick={() => { setShowResolveForm(false); setJustification(''); setResolveError(null) }}
                       className="px-4 py-2 text-sm border border-[#2e2e2e] text-[#f0f0f0] rounded-lg hover:border-[#888888] transition-colors"
                     >
                       Cancelar
@@ -280,7 +290,8 @@ export function SubmissionDetailPage() {
               )}
             </div>
           )}
-      </div>
+        </div>
+      )}
 
       {actividadTipo === 'informe' && (
         <div className="border-t border-[#2e2e2e] pt-4 mt-4">

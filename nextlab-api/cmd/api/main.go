@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
@@ -115,6 +117,14 @@ func main() {
 	slog.Info("minio ready", slog.String("bucket", cfg.MinioBucket), slog.String("correlation_id", "system"))
 
 	app := fiber.New()
+	app.Use(cors.New(cors.Config{
+		AllowOriginsFunc: func(origin string) bool {
+			return strings.HasPrefix(origin, "http://localhost:") || strings.HasPrefix(origin, "http://127.0.0.1:")
+		},
+		AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+		AllowHeaders:     "Origin,Content-Type,Authorization",
+		AllowCredentials: false,
+	}))
 	app.Use(correlationIDMiddleware())
 
 	healthChecker := health.NewChecker(pgPool, redisClient, minioClient)
@@ -135,14 +145,16 @@ func main() {
 	academic.RegisterRoutes(app, pgPool, redisClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
 	tracingSvc := tracing.RegisterRoutes(app, pgPool, redisClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
 	submission.RegisterRoutes(app, pgPool, minioClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard, tracingSvc, alertsModule.Service())
-	ai.RegisterRoutes(app, pgPool, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
-	rag.RegisterRoutes(app, pgPool, minioClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
 
-	// Detection Engine (M8) — builds shared AI dependencies
-	detectionRepo := detection.NewDetectionRepository(pgPool)
-	heuristicEngine := detection.NewHeuristicEngine(cfg)
+	// AI service created early so it can be shared with RAG and Detection
 	aiRepo := ai.NewRepository(pgPool)
 	aiSvc := ai.NewService(aiRepo, cfg)
+	ai.RegisterRoutes(app, pgPool, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
+	rag.RegisterRoutes(app, pgPool, minioClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard, aiSvc)
+
+	// Detection Engine (M8)
+	detectionRepo := detection.NewDetectionRepository(pgPool)
+	heuristicEngine := detection.NewHeuristicEngine(cfg)
 	embedClient := rag.NewEmbedClient(cfg)
 	ragSvc := rag.NewRetrieveService(
 		rag.NewCurricularRepository(pgPool),

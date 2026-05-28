@@ -1,8 +1,7 @@
-version: '3.9'
-
 services:
   postgres:
     image: pgvector/pgvector:pg16
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -20,6 +19,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - "6379:6379"
     healthcheck:
@@ -32,6 +32,7 @@ services:
 
   minio:
     image: minio/minio:latest
+    restart: unless-stopped
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -49,6 +50,7 @@ services:
 
   ollama:
     image: ollama/ollama:latest
+    restart: unless-stopped
     ports:
       - "11434:11434"
     volumes:
@@ -58,36 +60,35 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/nextlab?sslmode=disable
       REDIS_ADDR: redis:6379
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
-      API_PORT: 8080
+      MINIO_BUCKET: nextlab
+      MINIO_USE_SSL: "false"
+      API_PORT: "8080"
       LOG_LEVEL: info
       APP_ENV: development
       JWT_SECRET: nextlab-dev-secret-key-change-in-production-env
       ACCESS_TOKEN_TTL: 15m
       REFRESH_TOKEN_TTL: 168h
-      # Google OAuth (dev placeholders — not functional without real credentials)
       GOOGLE_CLIENT_ID: dev-google-client-id
       GOOGLE_CLIENT_SECRET: dev-google-client-secret
       GOOGLE_REDIRECT_URL: http://localhost:8080/auth/google/callback
-      # AI Router (M6)
       AI_PRIMARY_URL: http://ollama:11434
       AI_PRIMARY_MODEL: llama3
       AI_PRIMARY_TIMEOUT_SECS: "30"
-      AI_CLOUD_URL: ""       # set to Vercel AI Gateway URL for cloud/auto mode
-      AI_CLOUD_API_KEY: ""   # set to Vercel AI Gateway API key for cloud/auto mode
-      # Dual RAG Pipeline (M7)
+      AI_CLOUD_URL: ""
+      AI_CLOUD_API_KEY: ""
       AI_EMBED_URL: http://ollama:11434
       AI_EMBED_MODEL: nomic-embed-text
       AI_EMBED_DIMENSION: "1536"
       RAG_CHUNK_TOKENS: "512"
       RAG_CHUNK_OVERLAP: "64"
       RAG_TOKEN_BUDGET: "2048"
-      # Detection Engine (M8)
       HEURISTIC_TAB_WEIGHT: "5"
       HEURISTIC_CLIP_WEIGHT: "3"
       HEURISTIC_GAP_WEIGHT: "2"
@@ -101,47 +102,44 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-    command: ./api
 
   worker:
     build:
       context: .
       dockerfile: docker/Dockerfile
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/nextlab?sslmode=disable
       REDIS_ADDR: redis:6379
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
-      API_PORT: 8080
+      MINIO_BUCKET: nextlab
+      MINIO_USE_SSL: "false"
+      API_PORT: "8080"
       LOG_LEVEL: info
       APP_ENV: development
       JWT_SECRET: nextlab-dev-secret-key-change-in-production-env
-      # Google OAuth (dev placeholders)
       GOOGLE_CLIENT_ID: dev-google-client-id
       GOOGLE_CLIENT_SECRET: dev-google-client-secret
       GOOGLE_REDIRECT_URL: http://localhost:8080/auth/google/callback
-      # AI Router (M6)
       AI_PRIMARY_URL: http://ollama:11434
       AI_PRIMARY_MODEL: llama3
       AI_PRIMARY_TIMEOUT_SECS: "30"
       AI_CLOUD_URL: ""
       AI_CLOUD_API_KEY: ""
-      # Dual RAG Pipeline (M7)
       AI_EMBED_URL: http://ollama:11434
       AI_EMBED_MODEL: nomic-embed-text
       AI_EMBED_DIMENSION: "1536"
       RAG_CHUNK_TOKENS: "512"
       RAG_CHUNK_OVERLAP: "64"
       RAG_TOKEN_BUDGET: "2048"
-      # Detection Engine (M8)
       HEURISTIC_TAB_WEIGHT: "5"
       HEURISTIC_CLIP_WEIGHT: "3"
       HEURISTIC_GAP_WEIGHT: "2"
       HEURISTIC_HIGH_THRESHOLD: "60"
     depends_on:
-      api:
-        condition: service_started
+      - api
     command: ./worker
 
   migrate:
