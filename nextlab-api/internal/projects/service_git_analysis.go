@@ -4,25 +4,45 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/Elder2003/nextlab-api/internal/ai"
+	"github.com/Elder2003/nextlab-api/internal/config"
 	"github.com/google/uuid"
 )
 
 type GitAnalysisService struct {
 	repo  *Repository
 	aiSvc *ai.Service
+	cfg   *config.Config
 }
 
-func newGitAnalysisService(repo *Repository, aiSvc *ai.Service) *GitAnalysisService {
-	return &GitAnalysisService{repo: repo, aiSvc: aiSvc}
+func newGitAnalysisService(repo *Repository, aiSvc *ai.Service, cfg *config.Config) *GitAnalysisService {
+	return &GitAnalysisService{repo: repo, aiSvc: aiSvc, cfg: cfg}
+}
+
+// validateGitURL checks that the URL uses https and belongs to an allowed host.
+func validateGitURL(rawURL string, allowedHosts []string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return fmt.Errorf("scheme_not_allowed")
+	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("scheme_not_allowed")
+	}
+	hostname := u.Hostname()
+	for _, h := range allowedHosts {
+		if strings.EqualFold(hostname, strings.TrimSpace(h)) {
+			return nil
+		}
+	}
+	return fmt.Errorf("host_not_allowed")
 }
 
 // SubmitGitURL records a student's repo URL and enqueues an analysis job.
 func (s *GitAnalysisService) SubmitGitURL(ctx context.Context, studentID, actividadID uuid.UUID, repoURL string) (*GitSubmission, string, error) {
-	// Validate URL is parseable
-	if _, err := url.ParseRequestURI(repoURL); err != nil {
-		return nil, "", fmt.Errorf("invalid repo_url")
+	if err := validateGitURL(repoURL, s.cfg.GitAllowedHosts); err != nil {
+		return nil, "", err
 	}
 
 	_, cursoID, _, err := s.repo.GetActividadTipo(ctx, actividadID)

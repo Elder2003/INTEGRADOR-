@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createSession, endSession } from '../api/tracing'
 import { useAuth } from '../context/AuthContext'
+import { useOfflineBuffer } from './useOfflineBuffer'
 
 export type SessionStatus =
   | 'idle'
@@ -29,6 +30,8 @@ export function useTracingSession(aid: string, traceEnabled: boolean): TracingSe
   const reconnectAttemptsRef = useRef(0)
   const listenersCleanupRef = useRef<(() => void) | null>(null)
 
+  const { bufferEventIfOffline, flushBuffer } = useOfflineBuffer(sessionId)
+
   const removeListeners = useCallback(() => {
     if (listenersCleanupRef.current) {
       listenersCleanupRef.current()
@@ -38,13 +41,19 @@ export function useTracingSession(aid: string, traceEnabled: boolean): TracingSe
 
   const sendEvent = useCallback(
     (type: string, content?: string) => {
+      const metadata: Record<string, unknown> = {}
+      if (content !== undefined) metadata.content = content.slice(0, 500)
+
+      // Buffer the event if offline; it will be flushed automatically on reconnect
+      if (bufferEventIfOffline(type, metadata)) return
+
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         const msg: Record<string, string> = { type, timestamp: new Date().toISOString() }
         if (content !== undefined) msg.content = content.slice(0, 500)
         wsRef.current.send(JSON.stringify(msg))
       }
     },
-    [],
+    [bufferEventIfOffline],
   )
 
   const attachListeners = useCallback(() => {
@@ -83,6 +92,8 @@ export function useTracingSession(aid: string, traceEnabled: boolean): TracingSe
         reconnectAttemptsRef.current = 0
         setStatus('active')
         attachListeners()
+        // Flush any events buffered while offline
+        flushBuffer()
       }
 
       ws.onmessage = (event) => {

@@ -163,6 +163,71 @@ func makeWSHandler(hub *Hub, svc *Service) func(*websocket.Conn) {
 	}
 }
 
+// makeWSObserveHandler returns the docente live-observation WebSocket handler for /sessions/:sid/ws/observe.
+// Docentes may only observe sessions from their own courses; admins have global access.
+func makeWSObserveHandler(hub *Hub, svc *Service) func(*websocket.Conn) {
+	return func(c *websocket.Conn) {
+		ctx := context.Background()
+
+		sidStr := c.Params("sid")
+		sessionID, err := uuid.Parse(sidStr)
+		if err != nil {
+			sendJSON(c, WSError{Type: "error", Code: "invalid_session", Message: "invalid session id"})
+			c.Close()
+			return
+		}
+
+		userIDStr, _ := c.Locals("user_id").(string)
+		role, _ := c.Locals("user_role").(string)
+
+		if role != "docente" && role != "admin" {
+			sendJSON(c, WSError{Type: "error", Code: "unauthorized", Message: "access denied"})
+			c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(1008, "unauthorized"))
+			c.Close()
+			return
+		}
+
+		if role == "docente" {
+			docenteID, parseErr := uuid.Parse(userIDStr)
+			if parseErr != nil {
+				sendJSON(c, WSError{Type: "error", Code: "unauthorized", Message: "invalid user"})
+				c.Close()
+				return
+			}
+			owns, checkErr := svc.repo.VerifyDocenteOwnsSession(ctx, sessionID, docenteID)
+			if checkErr != nil || !owns {
+				sendJSON(c, WSError{Type: "error", Code: "unauthorized", Message: "access denied"})
+				c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(1008, "unauthorized"))
+				c.Close()
+				return
+			}
+		}
+
+		session, err := svc.repo.GetSessionByID(ctx, sessionID)
+		if err != nil || session == nil {
+			sendJSON(c, WSError{Type: "error", Code: "session_not_found", Message: "session not found"})
+			c.Close()
+			return
+		}
+
+		hub.Add(sidStr, c)
+		defer hub.Remove(sidStr, c)
+
+		sendJSON(c, WSConnected{
+			Type:       "connected",
+			SessionID:  sidStr,
+			EventCount: session.EventCount,
+		})
+
+		// Observation only — ignore all incoming messages, break on disconnect
+		for {
+			if _, _, err := c.ReadMessage(); err != nil {
+				break
+			}
+		}
+	}
+}
+
 func sendJSON(c *websocket.Conn, v any) {
 	b, err := json.Marshal(v)
 	if err != nil {

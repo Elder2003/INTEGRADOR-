@@ -7,20 +7,23 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Elder2003/nextlab-api/internal/ai"
 	"github.com/Elder2003/nextlab-api/internal/alerts"
+	"github.com/Elder2003/nextlab-api/internal/config"
 	gogit "github.com/go-git/go-git/v5"
 	gogitcfg "github.com/go-git/go-git/v5/plumbing/transport/http"
 )
 
-const cloneDepth = 200
+const cloneDepth = 1
 
 // ProcessGitAnalysisJob clones the repo, extracts commit stats, runs heuristics, and dispatches to the LLM.
 // Clone or extraction failures are stored as failed analysis records — the submission is never affected (FR-012, Principle VII).
-func ProcessGitAnalysisJob(ctx context.Context, job *GitAnalysisJob, repo *Repository, aiSvc *ai.Service, alertWriter alerts.AlertWriter) error {
+func ProcessGitAnalysisJob(ctx context.Context, job *GitAnalysisJob, repo *Repository, aiSvc *ai.Service, alertWriter alerts.AlertWriter, cfg *config.Config) error {
 	slog.InfoContext(ctx, "processing git analysis job",
 		"job_id", job.ID, "git_analysis_id", job.GitAnalysisID, "repo_url", job.RepoURL)
 
@@ -30,14 +33,44 @@ func ProcessGitAnalysisJob(ctx context.Context, job *GitAnalysisJob, repo *Repos
 		deadline = time.Time{}
 	}
 
-	// ── Phase 1: Clone ────────────────────────────────────────────────────────
-	dir, cleanup, cloneErr := cloneRepo(ctx, job.RepoURL)
+	// ── Phase 1: Clone (with timeout) ─────────────────────────────────────────
+	cloneCtx, cloneCancel := context.WithTimeout(ctx, time.Duration(cfg.GitCloneTimeoutSec)*time.Second)
+	defer cloneCancel()
+
+	dir, cleanup, cloneErr := cloneRepo(cloneCtx, job.RepoURL)
 	if cloneErr != nil {
 		slog.WarnContext(ctx, "clone failed; storing clone_error", "job_id", job.ID, "err", cloneErr)
-		_ = repo.UpdateGitAnalysisFailed(ctx, job.GitAnalysisID, "clone_error")
+		if job.Retries >= job.MaxRetries-1 {
+			_ = repo.MarkGitAnalysisJobDead(ctx, job.ID, "clone_error: "+cloneErr.Error())
+		} else {
+			_ = repo.UpdateGitAnalysisFailed(ctx, job.GitAnalysisID, "clone_error")
+		}
 		return nil
 	}
 	defer cleanup()
+
+	// ── Phase 1b: Size check ─────────────────────────────────────────────────
+	if cfg.GitMaxRepoSizeMB > 0 {
+		out, duErr := exec.CommandContext(ctx, "du", "-sb", dir).Output()
+		if duErr == nil {
+			fields := strings.Fields(string(out))
+			if len(fields) > 0 {
+				if sizeBytes, parseErr := strconv.ParseInt(fields[0], 10, 64); parseErr == nil {
+					maxBytes := int64(cfg.GitMaxRepoSizeMB) * 1024 * 1024
+					if sizeBytes > maxBytes {
+						slog.WarnContext(ctx, "repo exceeds size limit; storing repo_size_exceeded",
+							"job_id", job.ID, "size_bytes", sizeBytes, "max_bytes", maxBytes)
+						if job.Retries >= job.MaxRetries-1 {
+							_ = repo.MarkGitAnalysisJobDead(ctx, job.ID, "repo_size_exceeded")
+						} else {
+							_ = repo.UpdateGitAnalysisFailed(ctx, job.GitAnalysisID, "repo_size_exceeded")
+						}
+						return nil
+					}
+				}
+			}
+		}
+	}
 
 	// ── Phase 2: Extract commit stats ─────────────────────────────────────────
 	stats, statsErr := extractCommitStats(dir, deadline)

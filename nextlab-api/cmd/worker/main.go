@@ -103,7 +103,7 @@ func main() {
 
 	// M10: Git analysis worker
 	projectsRepo := projects.NewRepository(pgPool)
-	go runGitAnalysisLoop(ctx, projectsRepo, aiSvc, alertsModule.Service())
+	go runGitAnalysisLoop(ctx, projectsRepo, aiSvc, alertsModule.Service(), cfg)
 
 	// Create consumer group (idempotent — ignore BUSYGROUP error)
 	_ = rdb.XGroupCreateMkStream(ctx, streamName, consumerGroup, "0").Err()
@@ -169,6 +169,16 @@ func processMessage(ctx context.Context, svc *tracing.Service, rdb *redis.Client
 
 	if err := processJob(ctx, wh, msg.Values); err != nil {
 		slog.ErrorContext(ctx, "job failed", "job_id", jobIDStr, "err", err)
+		// Check if job has exhausted max_retries → move to DLQ and XAck
+		if jobIDStr != "" {
+			if jobID, parseErr := uuid.Parse(jobIDStr); parseErr == nil {
+				if dead, _ := svc.MarkJobDeadIfExhausted(ctx, jobID, err.Error()); dead {
+					slog.WarnContext(ctx, "job moved to dead letter queue", "job_id", jobIDStr)
+					_ = rdb.XAck(ctx, streamName, consumerGroup, msg.ID)
+					return
+				}
+			}
+		}
 		// Leave in PEL; will be re-claimed by orphan claimer on next sweep
 		return
 	}
@@ -279,7 +289,7 @@ func sweepTimedOut(ctx context.Context, svc *tracing.Service) {
 }
 
 // runGitAnalysisLoop polls git_analysis_jobs every 10 seconds and processes any queued jobs.
-func runGitAnalysisLoop(ctx context.Context, repo *projects.Repository, aiSvc *ai.Service, alertWriter alerts.AlertWriter) {
+func runGitAnalysisLoop(ctx context.Context, repo *projects.Repository, aiSvc *ai.Service, alertWriter alerts.AlertWriter, cfg *config.Config) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -296,7 +306,7 @@ func runGitAnalysisLoop(ctx context.Context, repo *projects.Repository, aiSvc *a
 				if job == nil {
 					break
 				}
-				if err := projects.ProcessGitAnalysisJob(ctx, job, repo, aiSvc, alertWriter); err != nil {
+				if err := projects.ProcessGitAnalysisJob(ctx, job, repo, aiSvc, alertWriter, cfg); err != nil {
 					slog.ErrorContext(ctx, "git analysis job failed", "job_id", job.ID, "err", err)
 					_ = repo.FailGitAnalysisJob(ctx, job.ID)
 				} else {

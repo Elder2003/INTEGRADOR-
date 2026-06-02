@@ -14,9 +14,20 @@ import (
 
 	"github.com/Elder2003/nextlab-api/internal/ai"
 	"github.com/Elder2003/nextlab-api/internal/alerts"
+	"github.com/Elder2003/nextlab-api/internal/baseline"
 	"github.com/Elder2003/nextlab-api/internal/config"
 	"github.com/Elder2003/nextlab-api/internal/rag"
 )
+
+// NotificationPublisher is implemented by *notifications.Service; defined here to avoid import cycles.
+type NotificationPublisher interface {
+	Publish(studentID uuid.UUID, notifType string, payload any) error
+}
+
+// WebhookTrigger is implemented by *webhooks.Service; defined here to avoid import cycles.
+type WebhookTrigger interface {
+	TriggerAsync(eventType string, data any)
+}
 
 type DetectionService struct {
 	repo        *DetectionRepository
@@ -26,7 +37,31 @@ type DetectionService struct {
 	minio       *minio.Client
 	minioBucket string
 	cfg         *config.Config
-	alertWriter alerts.AlertWriter
+	alertWriter    alerts.AlertWriter
+	notifSvc       NotificationPublisher
+	baselineSvc    *baseline.Service
+	webhookTrigger WebhookTrigger
+	mlRuntime      MLPredictor
+}
+
+// SetBaselineService wires the baseline service after construction.
+func (s *DetectionService) SetBaselineService(b *baseline.Service) {
+	s.baselineSvc = b
+}
+
+// SetWebhookTrigger wires the webhook trigger after construction.
+func (s *DetectionService) SetWebhookTrigger(w WebhookTrigger) {
+	s.webhookTrigger = w
+}
+
+// MLPredictor is the minimal interface for ONNX inference.
+type MLPredictor interface {
+	Predict(tabBlursRate, clipboardRate, heartbeatGapAvg, durationMin, burstWindows, eventsPerMin float64) (float64, error)
+}
+
+// SetMLRuntime wires the ML runtime after construction.
+func (s *DetectionService) SetMLRuntime(ml MLPredictor) {
+	s.mlRuntime = ml
 }
 
 func NewDetectionService(
@@ -51,6 +86,12 @@ func NewDetectionService(
 	}
 }
 
+// SetNotificationPublisher wires the notification service after construction
+// (avoids a circular dependency at init time).
+func (s *DetectionService) SetNotificationPublisher(p NotificationPublisher) {
+	s.notifSvc = p
+}
+
 // RunHeuristic scores the session's trace events and stores a 'heuristic' row.
 // Idempotent: returns nil immediately if a heuristic row already exists (FR-012).
 func (s *DetectionService) RunHeuristic(ctx context.Context, sessionID uuid.UUID) error {
@@ -67,9 +108,75 @@ func (s *DetectionService) RunHeuristic(ctx context.Context, sessionID uuid.UUID
 		return fmt.Errorf("get trace events: %w", err)
 	}
 
-	score, flagged := s.heuristic.Score(events)
+	score, flagged, temporal := s.heuristic.ScoreWithTemporal(events)
 
-	if _, err := s.repo.InsertHeuristic(ctx, sessionID, score, flagged, len(events)); err != nil {
+	// Enrich temporal with baseline z-scores (best-effort; errors are non-fatal)
+	if s.baselineSvc != nil {
+		_, _, studentID, lookupErr := s.repo.GetSessionForDetection(ctx, sessionID)
+		if lookupErr == nil {
+			b, _ := s.baselineSvc.GetBaseline(ctx, studentID)
+			durationHours := temporal.SessionDurationMin / 60.0
+			if durationHours < 0.01 {
+				durationHours = 0.01
+			}
+			var tabBlursPerHour, clipboardPerHour float64
+			for _, e := range events {
+				switch e.EventType {
+				case "tab_blur":
+					tabBlursPerHour++
+				case "clipboard_copy", "clipboard_paste":
+					clipboardPerHour++
+				}
+			}
+			tabBlursPerHour /= durationHours
+			clipboardPerHour /= durationHours
+			zTab, zClip, available := s.baselineSvc.ComputeZScore(b, tabBlursPerHour, clipboardPerHour)
+			temporal.BaselineAvailable = available
+			if available && b != nil {
+				temporal.BaselineSessionsCount = b.TotalSessionsAnalyzed
+				temporal.ZScoreTabBlurs = zTab
+				temporal.ZScoreClipboard = zClip
+			}
+			// Update baseline async so it doesn't slow the worker SLA
+			go func() {
+				_ = s.baselineSvc.UpdateAfterAnalysis(context.Background(), studentID, tabBlursPerHour, clipboardPerHour, false)
+			}()
+		}
+	}
+
+	temporalJSON, _ := json.Marshal(temporal)
+
+	// Enrich temporal with ML score if runtime available (best-effort)
+	if s.mlRuntime != nil {
+		dH := temporal.SessionDurationMin / 60.0
+		if dH < 0.01 {
+			dH = 0.01
+		}
+		var tabR, clipR float64
+		for _, e := range events {
+			switch e.EventType {
+			case "tab_blur":
+				tabR++
+			case "clipboard_copy", "clipboard_paste":
+				clipR++
+			}
+		}
+		tabR /= dH
+		clipR /= dH
+		if mlScore, mlErr := s.mlRuntime.Predict(tabR, clipR, 0, temporal.SessionDurationMin, float64(temporal.BurstWindows), temporal.EventsPerMinute); mlErr == nil {
+			// Attach ml_score to temporalJSON by re-marshaling with the extra field
+			type withML struct {
+				TemporalMetrics
+				MLScore float64 `json:"ml_score"`
+			}
+			enriched := withML{TemporalMetrics: temporal, MLScore: mlScore}
+			if enrichedJSON, err := json.Marshal(enriched); err == nil {
+				temporalJSON = enrichedJSON
+			}
+		}
+	}
+
+	if _, err := s.repo.InsertHeuristic(ctx, sessionID, score, flagged, len(events), temporalJSON); err != nil {
 		return fmt.Errorf("insert heuristic: %w", err)
 	}
 
@@ -345,6 +452,25 @@ func (s *DetectionService) SubmitGrade(ctx context.Context, sessionID, docenteID
 	if err != nil {
 		return nil, fmt.Errorf("fetch grade decision: %w", err)
 	}
+
+	// Fire grade_posted notification and webhook (best-effort)
+	if s.notifSvc != nil || s.webhookTrigger != nil {
+		_, _, studentID, lookupErr := s.repo.GetSessionForDetection(ctx, sessionID)
+		if lookupErr == nil {
+			payload := map[string]any{
+				"session_id": sessionID,
+				"student_id": studentID,
+				"grade":      req.FinalGrade,
+			}
+			if s.notifSvc != nil {
+				go s.notifSvc.Publish(studentID, "grade_posted", payload)
+			}
+			if s.webhookTrigger != nil {
+				s.webhookTrigger.TriggerAsync("grade.published", payload)
+			}
+		}
+	}
+
 	return g, nil
 }
 

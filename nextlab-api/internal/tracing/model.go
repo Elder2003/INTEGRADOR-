@@ -42,6 +42,8 @@ type WorkerJob struct {
 	DoneAt       *time.Time `db:"done_at"`
 	AttemptCount int        `db:"attempt_count"`
 	Error        *string    `db:"error"`
+	MaxRetries   int        `db:"max_retries"`
+	DeadAt       *time.Time `db:"dead_at"`
 }
 
 // ─── API response types ───────────────────────────────────────────────────────
@@ -77,6 +79,14 @@ type VerifyResponse struct {
 	Valid                bool `json:"valid"`
 	EventCount           int  `json:"event_count"`
 	FirstInvalidSequence *int `json:"first_invalid_sequence,omitempty"`
+}
+
+type TraceEventsPage struct {
+	SessionID  string           `json:"session_id"`
+	Data       []TraceEventItem `json:"data"`
+	NextCursor *int             `json:"next_cursor,omitempty"`
+	HasMore    bool             `json:"has_more"`
+	Total      int              `json:"total"`
 }
 
 // ─── WebSocket message types ──────────────────────────────────────────────────

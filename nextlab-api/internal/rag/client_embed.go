@@ -80,6 +80,20 @@ func (c *EmbedClient) Embed(ctx context.Context, text string) ([]float32, error)
 	return result.Data[0].Embedding, nil
 }
 
+// ValidateDimension calls the embed model with a probe string and verifies the returned
+// vector dimension matches expectedDim. Returns nil if the model is unreachable (soft fail)
+// so the API can still start in environments where Ollama is offline at boot time.
+func ValidateDimension(ctx context.Context, client *EmbedClient, expectedDim int) error {
+	vec, err := client.Embed(ctx, "dimension-check")
+	if err != nil {
+		return nil
+	}
+	if len(vec) != expectedDim {
+		return fmt.Errorf("embed dimension mismatch: configured=%d model_returns=%d", expectedDim, len(vec))
+	}
+	return nil
+}
+
 // formatVector encodes a float32 slice as a pgvector text literal: [f1,f2,...,fn]
 func formatVector(v []float32) string {
 	parts := make([]string, len(v))

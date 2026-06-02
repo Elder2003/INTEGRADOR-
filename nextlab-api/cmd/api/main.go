@@ -28,6 +28,11 @@ import (
 	"github.com/Elder2003/nextlab-api/internal/config"
 	"github.com/Elder2003/nextlab-api/internal/detection"
 	"github.com/Elder2003/nextlab-api/internal/health"
+	"github.com/Elder2003/nextlab-api/internal/baseline"
+	"github.com/Elder2003/nextlab-api/internal/mldetection"
+	"github.com/Elder2003/nextlab-api/internal/notifications"
+	"github.com/Elder2003/nextlab-api/internal/pdf"
+	"github.com/Elder2003/nextlab-api/internal/webhooks"
 	"github.com/Elder2003/nextlab-api/internal/projects"
 	"github.com/Elder2003/nextlab-api/internal/rag"
 	"github.com/Elder2003/nextlab-api/internal/submission"
@@ -127,9 +132,13 @@ func main() {
 	}))
 	app.Use(correlationIDMiddleware())
 
-	healthChecker := health.NewChecker(pgPool, redisClient, minioClient)
+	// health checker initialized after embedClient is available (see below)
+	var healthChecker *health.Checker
 
 	app.Get("/health", func(c *fiber.Ctx) error {
+		if healthChecker == nil {
+			return c.Status(503).JSON(fiber.Map{"status": "starting"})
+		}
 		report := healthChecker.Check(c.Context())
 		c.Status(report.StatusCode())
 		return c.JSON(report)
@@ -141,6 +150,18 @@ func main() {
 	analyticsModule := analytics.NewModule(pgPool)
 	analyticsModule.RegisterRoutes(app, auth.AuthMiddleware(cfg), auth.RoleGuard)
 
+	// M17: Student notifications
+	notifSvc := notifications.SetupRoutes(app, pgPool, redisClient, auth.AuthMiddleware(cfg), auth.RoleGuard)
+
+	// M17: Webhooks (US8)
+	webhooksSvc := webhooks.SetupRoutes(app, pgPool, chainMW(auth.AuthMiddleware(cfg), auth.RoleGuard("admin")))
+
+	// M17: PDF reports (US3)
+	pdf.SetupRoutes(app, pgPool,
+		chainMW(auth.AuthMiddleware(cfg), auth.RoleGuard("docente")),
+		chainMW(auth.AuthMiddleware(cfg), auth.RoleGuard("admin")),
+	)
+
 	auth.RegisterRoutes(app, pgPool, redisClient, cfg)
 	academic.RegisterRoutes(app, pgPool, redisClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
 	tracingSvc := tracing.RegisterRoutes(app, pgPool, redisClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
@@ -150,19 +171,34 @@ func main() {
 	aiRepo := ai.NewRepository(pgPool)
 	aiSvc := ai.NewService(aiRepo, cfg)
 	ai.RegisterRoutes(app, pgPool, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard)
-	rag.RegisterRoutes(app, pgPool, minioClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard, aiSvc)
 
-	// Detection Engine (M8)
+	// Detection Engine (M8) — embedClient and rate limiter created before RAG routes
 	detectionRepo := detection.NewDetectionRepository(pgPool)
 	heuristicEngine := detection.NewHeuristicEngine(cfg)
 	embedClient := rag.NewEmbedClient(cfg)
+	if err := rag.ValidateDimension(ctx, embedClient, cfg.AIEmbedDimension); err != nil {
+		slog.Error("FATAL embed dimension mismatch", "err", err)
+		os.Exit(1)
+	}
+	aiRateLimiter := ai.NewAIRateLimiter(redisClient, cfg.AIRateLimitRequests, cfg.AIRateLimitWindowSec)
+	healthChecker = health.NewChecker(pgPool, redisClient, minioClient, cfg.AIPrimaryURL, cfg.AIPrimaryModel, embedClient)
+	// mlSvc is wired to health after detection setup (below)
+	rag.RegisterRoutes(app, pgPool, minioClient, cfg, auth.AuthMiddleware(cfg), auth.RoleGuard, aiSvc, aiRateLimiter)
 	ragSvc := rag.NewRetrieveService(
 		rag.NewCurricularRepository(pgPool),
 		rag.NewDocenteRepository(pgPool),
 		embedClient,
 		cfg,
 	)
+	baselineSvc := baseline.NewService(baseline.NewRepository(pgPool))
+	mlSvc := mldetection.SetupRoutes(app, pgPool, cfg.MLModelDir, cfg.DatabaseURL,
+		chainMW(auth.AuthMiddleware(cfg), auth.RoleGuard("admin")))
 	detectionSvc := detection.NewDetectionService(detectionRepo, heuristicEngine, aiSvc, ragSvc, minioClient, cfg.MinioBucket, cfg, alertsModule.Service())
+	detectionSvc.SetNotificationPublisher(notifSvc)
+	detectionSvc.SetBaselineService(baselineSvc)
+	detectionSvc.SetWebhookTrigger(webhooksSvc)
+	detectionSvc.SetMLRuntime(mlSvc.GetRuntime())
+	healthChecker.SetMLMetaProvider(&mlHealthAdapter{svc: mlSvc})
 	detection.RegisterRoutes(app, detectionSvc, auth.AuthMiddleware(cfg), auth.RoleGuard)
 
 	// Project Management (M10)
@@ -175,6 +211,8 @@ func main() {
 
 	// Appeals & Final Audit (M13)
 	appealsModule := appeals.NewModule(pgPool)
+	appealsModule.SetNotificationPublisher(notifSvc)
+	appealsModule.SetWebhookTrigger(webhooksSvc)
 	appealsModule.RegisterRoutes(app, auth.AuthMiddleware(cfg), auth.RoleGuard)
 
 	slog.Info("server started",
@@ -186,6 +224,30 @@ func main() {
 	if err := app.Listen(":" + cfg.APIPort); err != nil {
 		slog.Error("server error", "err", err)
 		os.Exit(1)
+	}
+}
+
+// mlHealthAdapter adapts *mldetection.Service to health.MLMetaProvider.
+type mlHealthAdapter struct{ svc *mldetection.Service }
+
+func (a *mlHealthAdapter) GetActiveMeta() health.MLModelMeta {
+	m := a.svc.GetActiveMeta()
+	if m == nil {
+		return health.MLModelMeta{}
+	}
+	return health.MLModelMeta{Available: true, Version: m.Version, TrainedAt: m.TrainedAt.Format("2006-01-02")}
+}
+
+// chainMW combines two middleware handlers into one for use as a single fiber.Handler.
+func chainMW(first, second fiber.Handler) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		if err := first(c); err != nil {
+			return err
+		}
+		if c.Response().StatusCode() >= 400 {
+			return nil
+		}
+		return second(c)
 	}
 }
 

@@ -105,16 +105,17 @@ type GitAnalysis struct {
 }
 
 type GitAnalysisJob struct {
-	ID              uuid.UUID  `json:"id"`
-	GitAnalysisID   uuid.UUID  `json:"git_analysis_id"`
-	Status          string     `json:"status"`
-	Retries         int        `json:"retries"`
-	QueuedAt        time.Time  `json:"queued_at"`
-	StartedAt       *time.Time `json:"started_at,omitempty"`
-	CompletedAt     *time.Time `json:"completed_at,omitempty"`
+	ID            uuid.UUID  `json:"id"`
+	GitAnalysisID uuid.UUID  `json:"git_analysis_id"`
+	Status        string     `json:"status"`
+	Retries       int        `json:"retries"`
+	MaxRetries    int        `json:"max_retries"`
+	QueuedAt      time.Time  `json:"queued_at"`
+	StartedAt     *time.Time `json:"started_at,omitempty"`
+	CompletedAt   *time.Time `json:"completed_at,omitempty"`
 	// joined from git_analyses + git_submissions for worker use
-	RepoURL         string     `json:"-"`
-	ActividadID     uuid.UUID  `json:"-"`
+	RepoURL     string    `json:"-"`
+	ActividadID uuid.UUID `json:"-"`
 }
 
 type GitReportResponse struct {

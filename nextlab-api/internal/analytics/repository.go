@@ -130,6 +130,142 @@ func (r *Repository) ActivityAnalyticsQuery(ctx context.Context, actividadID uui
 	return out, nil
 }
 
+// ─── M17: Percentiles (US2) ──────────────────────────────────────────────────
+
+// GetPercentiles computes class percentile distribution for an activity.
+// Returns nil result (and totalGraded count) if fewer than 5 graded submissions exist.
+func (r *Repository) GetPercentiles(ctx context.Context, actividadID, studentID uuid.UUID) (*PercentilesResult, int, error) {
+	var total int
+	if err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*) FROM submissions
+		WHERE actividad_id = $1 AND grade IS NOT NULL
+	`, actividadID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count graded: %w", err)
+	}
+	if total < 5 {
+		return nil, total, nil
+	}
+
+	res := &PercentilesResult{ActividadID: actividadID, StudentID: studentID, ClassSize: total}
+
+	if err := r.db.QueryRow(ctx, `
+		SELECT
+			percentile_disc(0.25) WITHIN GROUP (ORDER BY grade),
+			percentile_disc(0.50) WITHIN GROUP (ORDER BY grade),
+			percentile_disc(0.75) WITHIN GROUP (ORDER BY grade)
+		FROM submissions
+		WHERE actividad_id = $1 AND grade IS NOT NULL
+	`, actividadID).Scan(&res.P25, &res.P50, &res.P75); err != nil {
+		return nil, total, fmt.Errorf("percentile query: %w", err)
+	}
+
+	if err := r.db.QueryRow(ctx, `
+		SELECT COALESCE(grade, 0) FROM submissions
+		WHERE actividad_id = $1 AND student_id = $2 AND grade IS NOT NULL
+		LIMIT 1
+	`, actividadID, studentID).Scan(&res.StudentScore); err != nil {
+		return nil, total, fmt.Errorf("student grade: %w", err)
+	}
+
+	if err := r.db.QueryRow(ctx, `
+		SELECT COUNT(*) * 100.0 / $2
+		FROM submissions
+		WHERE actividad_id = $1 AND grade IS NOT NULL AND grade <= $3
+	`, actividadID, total, res.StudentScore).Scan(&res.StudentPercentile); err != nil {
+		return nil, total, fmt.Errorf("student percentile: %w", err)
+	}
+
+	return res, total, nil
+}
+
+// ─── M17: Admin Analytics (US4) ─────────────────────────────────────────────
+
+// GetAdminOverview returns platform-wide aggregate metrics for a given month (YYYY-MM).
+func (r *Repository) GetAdminOverview(ctx context.Context, period string) (*AdminOverview, error) {
+	out := &AdminOverview{Period: period}
+	if err := r.db.QueryRow(ctx, `
+		SELECT
+			COUNT(DISTINCT es.id)                                                        AS total_sessions,
+			(SELECT COUNT(*) FROM submissions)                                           AS total_submissions,
+			(SELECT COUNT(*) FROM analysis_results WHERE flagged_categories IS NOT NULL) AS active_detections,
+			COUNT(DISTINCT es.student_id)                                                AS active_students,
+			(SELECT COUNT(DISTINCT curso_id) FROM actividades)                           AS active_courses
+		FROM exam_sessions es
+	`).Scan(&out.TotalSessions, &out.TotalSubmissions, &out.ActiveDetections, &out.ActiveStudents, &out.ActiveCourses); err != nil {
+		return nil, fmt.Errorf("admin overview: %w", err)
+	}
+	return out, nil
+}
+
+// GetIntegrityByCarrera aggregates integrity metrics per carrera.
+func (r *Repository) GetIntegrityByCarrera(ctx context.Context, period string) ([]CarreraIntegrity, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT
+			m.carrera,
+			COUNT(DISTINCT es.id)                                                          AS sessions_analyzed,
+			COUNT(DISTINCT es.id) FILTER (WHERE ar.flagged_categories IS NOT NULL)         AS sessions_flagged,
+			COALESCE(AVG(ar.score), 0)                                                     AS avg_risk_score
+		FROM exam_sessions es
+		JOIN actividades a ON a.id = es.actividad_id
+		JOIN materias m ON m.codigo = a.codigo_materia
+		LEFT JOIN analysis_results ar ON ar.session_id = es.id
+		GROUP BY m.carrera
+		ORDER BY m.carrera
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("integrity by carrera: %w", err)
+	}
+	defer rows.Close()
+
+	var out []CarreraIntegrity
+	for rows.Next() {
+		var c CarreraIntegrity
+		if err := rows.Scan(&c.Carrera, &c.SessionsAnalyzed, &c.SessionsFlagged, &c.AvgRiskScore); err != nil {
+			return nil, err
+		}
+		if c.SessionsAnalyzed > 0 {
+			c.FlagRatePct = float64(c.SessionsFlagged) * 100.0 / float64(c.SessionsAnalyzed)
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// GetSubmissionsByMateria aggregates submission stats per materia.
+func (r *Repository) GetSubmissionsByMateria(ctx context.Context, period string) ([]MateriaSubmissions, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT
+			a.codigo_materia,
+			m.nombre,
+			COUNT(DISTINCT a.id)          AS open_activities,
+			COUNT(sub.id)                 AS received,
+			COALESCE(AVG(sub.grade), 0)   AS avg_grade
+		FROM actividades a
+		LEFT JOIN materias m ON m.codigo = a.codigo_materia
+		LEFT JOIN submissions sub ON sub.actividad_id = a.id
+		GROUP BY a.codigo_materia, m.nombre
+		ORDER BY a.codigo_materia
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("submissions by materia: %w", err)
+	}
+	defer rows.Close()
+
+	var out []MateriaSubmissions
+	for rows.Next() {
+		var ms MateriaSubmissions
+		var avgGrade float64
+		if err := rows.Scan(&ms.CodigoMateria, &ms.MateriaNombre, &ms.OpenActivities, &ms.Received, &avgGrade); err != nil {
+			return nil, err
+		}
+		if avgGrade > 0 {
+			ms.AvgGrade = &avgGrade
+		}
+		out = append(out, ms)
+	}
+	return out, rows.Err()
+}
+
 // CourseAnalyticsQuery aggregates analytics across all activities in a course.
 func (r *Repository) CourseAnalyticsQuery(ctx context.Context, cursoID uuid.UUID, docenteID uuid.UUID) (CourseAnalytics, error) {
 	out := CourseAnalytics{CursoID: cursoID}

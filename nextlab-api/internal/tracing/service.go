@@ -173,6 +173,22 @@ func (s *Service) GetOrphanedJobs(ctx context.Context) ([]WorkerJob, error) {
 	return s.repo.GetOrphanedJobs(ctx)
 }
 
+// MarkJobDeadIfExhausted looks up the job by ID and marks it dead if attempt_count >= max_retries.
+// Returns true if the job was marked dead, false if it should still be retried.
+func (s *Service) MarkJobDeadIfExhausted(ctx context.Context, jobID uuid.UUID, errMsg string) (bool, error) {
+	var attemptCount, maxRetries int
+	err := s.repo.db.QueryRow(ctx,
+		`SELECT attempt_count, max_retries FROM worker_jobs WHERE id = $1`, jobID,
+	).Scan(&attemptCount, &maxRetries)
+	if err != nil {
+		return false, err
+	}
+	if attemptCount >= maxRetries {
+		return true, s.repo.MarkJobDead(ctx, jobID, errMsg)
+	}
+	return false, nil
+}
+
 // GetDeadlinedSessions returns active sessions whose activity deadline has passed.
 func (s *Service) GetDeadlinedSessions(ctx context.Context) ([]ExamSession, error) {
 	return s.repo.GetDeadlinedSessions(ctx)
@@ -248,4 +264,9 @@ func canonicalJSON(m map[string]any) string {
 // jsonUnmarshal is a helper alias used in repository.go scan.
 func jsonUnmarshal(data []byte, v any) error {
 	return json.Unmarshal(data, v)
+}
+
+// jsonMarshal is a helper alias used in repository.go batch insert.
+func jsonMarshal(v any) ([]byte, error) {
+	return json.Marshal(v)
 }

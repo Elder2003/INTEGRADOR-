@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/encrypt"
 
 	"github.com/Elder2003/nextlab-api/internal/alerts"
 )
@@ -124,7 +125,8 @@ func (s *Service) UploadFile(ctx context.Context, studentID, actividadID uuid.UU
 	defer f.Close()
 
 	_, err = s.mc.PutObject(ctx, s.bucket, storageKey, f, header.Size, minio.PutObjectOptions{
-		ContentType: mimeType,
+		ContentType:          mimeType,
+		ServerSideEncryption: encrypt.NewSSE(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrStorageUnavailable, err)
@@ -201,7 +203,8 @@ func (s *Service) ReplaceFile(ctx context.Context, studentID, actividadID uuid.U
 	defer f.Close()
 
 	_, err = s.mc.PutObject(ctx, s.bucket, newKey, f, header.Size, minio.PutObjectOptions{
-		ContentType: mimeType,
+		ContentType:          mimeType,
+		ServerSideEncryption: encrypt.NewSSE(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrStorageUnavailable, err)
