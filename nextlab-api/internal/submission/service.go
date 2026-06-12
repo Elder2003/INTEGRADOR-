@@ -136,7 +136,7 @@ func (s *Service) UploadFile(ctx context.Context, studentID, actividadID uuid.UU
 		ID:                  uuid.New(),
 		StudentID:           studentID,
 		ActividadID:         actividadID,
-		StorageKey:          storageKey,
+		StorageKey:          &storageKey,
 		OriginalFilename:    header.Filename,
 		FileSizeBytes:       header.Size,
 		MimeType:            mimeType,
@@ -166,6 +166,70 @@ func (s *Service) UploadFile(ctx context.Context, studentID, actividadID uuid.UU
 			Type:        alerts.AlertSubmissionReceived,
 			Payload:     map[string]any{"submission_id": sub.ID, "filename": header.Filename, "submitted_at": now},
 		})
+	}
+
+	resp := toResponse(sub)
+	return &resp, nil
+}
+
+// SubmitExamAnswer records a text exam answer for an exam-type actividad.
+func (s *Service) SubmitExamAnswer(ctx context.Context, studentID, actividadID uuid.UUID, answer string) (*SubmissionResponse, error) {
+	enrolled, err := s.repo.StudentEnrolledInActividad(ctx, studentID, actividadID)
+	if err != nil {
+		return nil, err
+	}
+	if !enrolled {
+		return nil, ErrNotEnrolled
+	}
+
+	act, err := s.repo.GetActividadInfo(ctx, actividadID)
+	if err != nil {
+		return nil, err
+	}
+	if act == nil || !act.CursoIsActive {
+		return nil, ErrActivityNotFound
+	}
+	if act.Tipo != "examen" {
+		return nil, ErrInvalidActivityType
+	}
+
+	existing, err := s.repo.GetSubmissionByStudent(ctx, studentID, actividadID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return nil, ErrSubmissionExists
+	}
+
+	sessionID, err := s.repo.GetActiveExamSessionID(ctx, studentID, actividadID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	isLate := now.After(act.Deadline)
+
+	sub := &Submission{
+		ID:               uuid.New(),
+		StudentID:        studentID,
+		ActividadID:      actividadID,
+		OriginalFilename: "exam_answer.txt",
+		FileSizeBytes:    int64(len(answer)),
+		MimeType:         "text/plain",
+		SubmittedAt:      now,
+		IsLate:           isLate,
+		ExamAnswer:       &answer,
+		SessionID:        sessionID,
+	}
+	if err := s.repo.InsertExamSubmission(ctx, sub); err != nil {
+		if isPgUniqueViolation(err) {
+			return nil, ErrSubmissionExists
+		}
+		return nil, err
+	}
+
+	if s.tracingSvc != nil {
+		s.tracingSvc.CloseSessionWithSubmission(ctx, studentID, actividadID, sub.ID)
 	}
 
 	resp := toResponse(sub)
@@ -229,13 +293,15 @@ func (s *Service) ReplaceFile(ctx context.Context, studentID, actividadID uuid.U
 		s.tracingSvc.CloseSessionWithSubmission(ctx, studentID, actividadID, existing.ID)
 	}
 
-	_ = s.mc.RemoveObject(ctx, s.bucket, oldKey, minio.RemoveObjectOptions{})
+	if oldKey != nil {
+		_ = s.mc.RemoveObject(ctx, s.bucket, *oldKey, minio.RemoveObjectOptions{})
+	}
 
 	updated := &Submission{
 		ID:                  existing.ID,
 		StudentID:           studentID,
 		ActividadID:         actividadID,
-		StorageKey:          newKey,
+		StorageKey:          &newKey,
 		OriginalFilename:    header.Filename,
 		FileSizeBytes:       header.Size,
 		MimeType:            mimeType,
@@ -265,7 +331,9 @@ func (s *Service) DeleteOwnSubmission(ctx context.Context, studentID, actividadI
 		return err
 	}
 
-	_ = s.mc.RemoveObject(ctx, s.bucket, oldKey, minio.RemoveObjectOptions{})
+	if oldKey != nil {
+		_ = s.mc.RemoveObject(ctx, s.bucket, *oldKey, minio.RemoveObjectOptions{})
+	}
 	return nil
 }
 
@@ -273,7 +341,10 @@ func (s *Service) DeleteOwnSubmission(ctx context.Context, studentID, actividadI
 
 // StreamFile opens the MinIO object for proxied download.
 func (s *Service) StreamFile(ctx context.Context, sub *Submission) (*StreamResult, error) {
-	obj, err := s.mc.GetObject(ctx, s.bucket, sub.StorageKey, minio.GetObjectOptions{})
+	if sub.StorageKey == nil {
+		return nil, ErrSubmissionNotFound
+	}
+	obj, err := s.mc.GetObject(ctx, s.bucket, *sub.StorageKey, minio.GetObjectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrStorageUnavailable, err)
 	}

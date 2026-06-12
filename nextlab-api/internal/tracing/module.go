@@ -45,5 +45,10 @@ func RegisterRoutes(
 	trace.Get("/:sid/trace/events", getTracePagedHandler(svc))
 	trace.Get("/:sid/trace/verify", verifyTraceHandler(svc))
 
+	// ─── Docente — live session monitoring (HTTP polling) ─────────────────────
+	docenteMW := []fiber.Handler{authMW, roleGuard("docente")}
+	app.Get("/cursos/:cid/actividades/:aid/sessions/active", append(docenteMW, listActiveSessionsHandler(svc))...)
+	app.Get("/sessions/:sid/events", append(docenteMW, getSessionEventsHandler(svc))...)
+
 	return svc
 }

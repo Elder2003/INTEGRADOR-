@@ -225,27 +225,41 @@ func (s *DetectionService) RunLLM(ctx context.Context, sessionID uuid.UUID) erro
 	}
 
 	// --- Retrieve submission text ---
+	// Exam submissions store the answer as exam_answer text; file submissions use MinIO.
 	submissionText := ""
+	activityInstructions := ""
 	if submissionID != uuid.Nil {
-		storageKey, originalFilename, err := s.repo.GetSubmissionStorageKey(ctx, submissionID)
+		examAnswer, instructions, err := s.repo.GetExamContext(ctx, submissionID, actividadID)
 		if err != nil {
-			slog.WarnContext(ctx, "could not get submission storage key", "submission_id", submissionID, "err", err)
+			slog.WarnContext(ctx, "could not get exam context", "submission_id", submissionID, "err", err)
 		} else {
-			obj, err := s.minio.GetObject(ctx, s.minioBucket, storageKey, minio.GetObjectOptions{})
+			activityInstructions = instructions
+			if examAnswer != "" {
+				submissionText = examAnswer
+			}
+		}
+		// If no exam_answer, fall back to MinIO file
+		if submissionText == "" {
+			storageKey, originalFilename, err := s.repo.GetSubmissionStorageKey(ctx, submissionID)
 			if err != nil {
-				slog.WarnContext(ctx, "could not fetch submission from minio", "key", storageKey, "err", err)
+				slog.WarnContext(ctx, "could not get submission storage key", "submission_id", submissionID, "err", err)
 			} else {
-				defer obj.Close()
-				data, err := io.ReadAll(obj)
+				obj, err := s.minio.GetObject(ctx, s.minioBucket, storageKey, minio.GetObjectOptions{})
 				if err != nil {
-					slog.WarnContext(ctx, "could not read submission bytes", "err", err)
+					slog.WarnContext(ctx, "could not fetch submission from minio", "key", storageKey, "err", err)
 				} else {
-					ext := strings.ToLower(filepath.Ext(originalFilename))
-					extracted, err := rag.ExtractText(data, ext)
+					defer obj.Close()
+					data, err := io.ReadAll(obj)
 					if err != nil {
-						slog.WarnContext(ctx, "text extraction failed", "ext", ext, "err", err)
+						slog.WarnContext(ctx, "could not read submission bytes", "err", err)
 					} else {
-						submissionText = extracted
+						ext := strings.ToLower(filepath.Ext(originalFilename))
+						extracted, err := rag.ExtractText(data, ext)
+						if err != nil {
+							slog.WarnContext(ctx, "text extraction failed", "ext", ext, "err", err)
+						} else {
+							submissionText = extracted
+						}
 					}
 				}
 			}
@@ -299,7 +313,7 @@ func (s *DetectionService) RunLLM(ctx context.Context, sessionID uuid.UUID) erro
 
 	// --- Build prompt ---
 	systemMsg := "You are an academic integrity assistant. Analyse the student submission below and provide an advisory assessment. Do NOT assign a final grade — your output is advisory only and will be reviewed by the course instructor."
-	userMsg := buildPrompt(submissionText, heuristic, curricularResp, docenteResp)
+	userMsg := buildPrompt(submissionText, activityInstructions, heuristic, curricularResp, docenteResp)
 
 	// --- Dispatch to AI router ---
 	chatResp, aiLog, err := s.aiSvc.Dispatch(ctx, ai.DispatchRequest{
@@ -331,11 +345,20 @@ func (s *DetectionService) RunLLM(ctx context.Context, sessionID uuid.UUID) erro
 	advisoryText := rawContent
 	suggestedRange := "unknown"
 
+	// Strip ```json ... ``` wrapper if the model returned fenced code
+	jsonCandidate := rawContent
+	if idx := strings.Index(jsonCandidate, "{"); idx > 0 {
+		jsonCandidate = jsonCandidate[idx:]
+	}
+	if idx := strings.LastIndex(jsonCandidate, "}"); idx >= 0 {
+		jsonCandidate = jsonCandidate[:idx+1]
+	}
+
 	var parsed struct {
 		AdvisoryText        string `json:"advisory_text"`
 		SuggestedGradeRange string `json:"suggested_grade_range"`
 	}
-	if err := json.Unmarshal([]byte(rawContent), &parsed); err == nil {
+	if err := json.Unmarshal([]byte(jsonCandidate), &parsed); err == nil {
 		if parsed.AdvisoryText != "" {
 			advisoryText = parsed.AdvisoryText
 		}
@@ -475,66 +498,69 @@ func (s *DetectionService) SubmitGrade(ctx context.Context, sessionID, docenteID
 }
 
 // buildPrompt constructs the LLM user message from all available context.
-func buildPrompt(submissionText string, h *HeuristicResult, curricular, docente *rag.RetrievalResponse) string {
+func buildPrompt(submissionText, activityInstructions string, h *HeuristicResult, curricular, docente *rag.RetrievalResponse) string {
 	var sb strings.Builder
 
-	sb.WriteString("## Submission Text\n")
+	sb.WriteString("## Instrucciones de la actividad\n")
+	if activityInstructions == "" {
+		sb.WriteString("(sin instrucciones disponibles)\n")
+	} else {
+		sb.WriteString(activityInstructions)
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString("\n## Respuesta entregada por el estudiante\n")
 	if submissionText == "" {
-		sb.WriteString("(file content unavailable)\n")
+		sb.WriteString("(contenido no disponible)\n")
 	} else {
 		sb.WriteString(submissionText)
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("\n## Behavioral Analysis\n")
+	sb.WriteString("\n## Análisis de comportamiento durante el examen\n")
 	if h != nil {
-		sb.WriteString(fmt.Sprintf("Suspicion score: %d/100\n", h.Score))
+		sb.WriteString(fmt.Sprintf("Puntaje de sospecha: %d/100\n", h.Score))
 		if len(h.FlaggedCategories) > 0 {
-			sb.WriteString(fmt.Sprintf("Flagged indicators: %s\n", strings.Join(h.FlaggedCategories, ", ")))
+			sb.WriteString(fmt.Sprintf("Indicadores detectados: %s\n", strings.Join(h.FlaggedCategories, ", ")))
 		} else {
-			sb.WriteString("Flagged indicators: none\n")
+			sb.WriteString("Indicadores detectados: ninguno\n")
 		}
-		sb.WriteString(fmt.Sprintf("Total trace events analysed: %d\n", h.EventCount))
+		sb.WriteString(fmt.Sprintf("Total de eventos de trazabilidad analizados: %d\n", h.EventCount))
 	} else {
-		sb.WriteString("Behavioral analysis not available.\n")
+		sb.WriteString("Análisis de comportamiento no disponible.\n")
 	}
 
-	sb.WriteString("\n## Curricular Context\n")
 	if curricular != nil && len(curricular.Chunks) > 0 {
+		sb.WriteString("\n## Contexto curricular\n")
 		for _, chunk := range curricular.Chunks {
 			sb.WriteString(chunk.ChunkText)
 			sb.WriteString("\n---\n")
 		}
-	} else {
-		sb.WriteString("(no curricular context available)\n")
 	}
 
-	// Rubric always injected in full — never truncated (Constitution Principle V)
-	sb.WriteString("\n## Rubric (full, untruncated)\n")
-	hasRubric := false
-	if curricular != nil {
+	if curricular != nil && len(curricular.Rubrics) > 0 {
+		sb.WriteString("\n## Rúbrica de evaluación\n")
 		for _, r := range curricular.Rubrics {
 			sb.WriteString(r.ChunkText)
 			sb.WriteString("\n")
-			hasRubric = true
 		}
 	}
-	if docente != nil {
+	if docente != nil && len(docente.Rubrics) > 0 {
+		sb.WriteString("\n## Criterios del docente\n")
 		for _, r := range docente.Rubrics {
 			sb.WriteString(r.ChunkText)
 			sb.WriteString("\n")
-			hasRubric = true
 		}
 	}
-	if !hasRubric {
-		sb.WriteString("(no rubric available)\n")
-	}
 
-	sb.WriteString("\n## Task\n")
-	sb.WriteString("1. Assess whether the submission is consistent with the student's expected knowledge level.\n")
-	sb.WriteString("2. Suggest a grade range (e.g., \"60-70\" or \"Reprobado\") with a brief justification.\n")
-	sb.WriteString("3. Note any specific concerns raised by the behavioral indicators.\n")
-	sb.WriteString("Format your response as JSON: {\"advisory_text\":\"...\",\"suggested_grade_range\":\"...\"}\n")
+	sb.WriteString("\n## Tarea del asistente\n")
+	sb.WriteString("Eres un asistente de integridad académica. Analiza la respuesta del estudiante considerando:\n")
+	sb.WriteString("1. ¿La respuesta cumple con lo que se solicitó en las instrucciones? Compara punto a punto.\n")
+	sb.WriteString("2. ¿El nivel de redacción y conocimiento es consistente con el nivel esperado del estudiante?\n")
+	sb.WriteString("3. ¿Los indicadores de comportamiento (copy-paste, cambios de pantalla, etc.) generan alguna sospecha?\n")
+	sb.WriteString("4. Sugiere un rango de calificación (ej: \"70-80\", \"50-60\", \"Reprobado\") con justificación breve.\n")
+	sb.WriteString("Responde ÚNICAMENTE con JSON válido, sin texto adicional, sin bloques de código:\n")
+	sb.WriteString("{\"advisory_text\":\"...\",\"suggested_grade_range\":\"...\"}\n")
 
 	return sb.String()
 }

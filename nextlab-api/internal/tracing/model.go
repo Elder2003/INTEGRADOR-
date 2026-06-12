@@ -89,6 +89,46 @@ type TraceEventsPage struct {
 	Total      int              `json:"total"`
 }
 
+// ─── Live monitoring types ─────────────────────────────────────────────────────
+
+type StudentInfo struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+type ActiveSessionRow struct {
+	ExamSession
+	StudentName  string
+	StudentEmail string
+}
+
+type ActiveSessionEntry struct {
+	SessionID  string      `json:"session_id"`
+	Student    StudentInfo `json:"student"`
+	StartedAt  time.Time   `json:"started_at"`
+	EventCount int         `json:"event_count"`
+}
+
+type ActiveSessionsListResponse struct {
+	ActividadID string               `json:"actividad_id"`
+	Sessions    []ActiveSessionEntry `json:"sessions"`
+}
+
+type LiveEventItem struct {
+	ID        string    `json:"id"`
+	SessionID string    `json:"session_id"`
+	Type      string    `json:"type"`
+	Timestamp time.Time `json:"timestamp"`
+	Content   *string   `json:"content"`
+}
+
+type LiveEventsResponse struct {
+	SessionID string          `json:"session_id"`
+	Events    []LiveEventItem `json:"events"`
+	Total     int             `json:"total"`
+}
+
 // ─── WebSocket message types ──────────────────────────────────────────────────
 
 type ClientEvent struct {

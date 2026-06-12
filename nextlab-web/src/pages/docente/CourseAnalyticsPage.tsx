@@ -25,7 +25,8 @@ export function CourseAnalyticsPage() {
   if (error) return <ErrorMessage message={error} />
   if (!data) return null
 
-  const isEmpty = data.activity_summaries.length === 0
+  const activities = data.activities ?? []
+  const isEmpty = activities.length === 0
 
   return (
     <div className="p-8 max-w-3xl">
@@ -38,33 +39,55 @@ export function CourseAnalyticsPage() {
 
       <h1 className="text-2xl font-semibold text-[#f0f0f0] mb-6">Analíticas del Curso</h1>
 
+      {/* Overall stats */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="bg-[#1a1a1a] border border-[#2e2e2e] rounded-xl p-4">
+          <p className="text-[#888888] text-xs mb-1">Entregas Totales</p>
+          <p className="text-2xl font-semibold text-[#f0f0f0]">{data.total_submissions}</p>
+        </div>
+        <div className="bg-[#1a1a1a] border border-[#2e2e2e] rounded-xl p-4">
+          <p className="text-[#888888] text-xs mb-1">Nota Promedio</p>
+          <p className="text-2xl font-semibold text-[#f0f0f0]">
+            {data.avg_grade !== null ? data.avg_grade.toFixed(1) : '—'}
+          </p>
+        </div>
+        <div className="bg-[#1a1a1a] border border-[#2e2e2e] rounded-xl p-4">
+          <p className="text-[#888888] text-xs mb-1">Tasa de Alerta</p>
+          <p className="text-2xl font-semibold text-[#f0f0f0]">
+            {(data.flag_rate * 100).toFixed(0)}%
+          </p>
+        </div>
+      </div>
+
       {/* Per-activity summary */}
       <div className="bg-[#1a1a1a] border border-[#2e2e2e] rounded-xl p-5 mb-4">
         <h2 className="text-[#f0f0f0] font-medium mb-4">Resumen por Actividad</h2>
         {isEmpty ? (
-          <p className="text-[#888888] text-sm">Sin datos de calificaciones aún.</p>
+          <p className="text-[#888888] text-sm">Sin actividades registradas aún.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-[#888888] border-b border-[#2e2e2e] text-left">
-                  <th className="py-2 pr-4 font-medium">Actividad</th>
+                  <th className="py-2 pr-4 font-medium">ID Actividad</th>
                   <th className="py-2 pr-4 font-medium">Entregas</th>
                   <th className="py-2 pr-4 font-medium">Nota Prom.</th>
-                  <th className="py-2 font-medium">Tardías</th>
+                  <th className="py-2 pr-4 font-medium">Tardías</th>
+                  <th className="py-2 font-medium">Alertas</th>
                 </tr>
               </thead>
               <tbody>
-                {data.activity_summaries.map(summary => (
-                  <tr key={summary.actividad_id} className="border-b border-[#2e2e2e]">
-                    <td className="py-2.5 pr-4 text-[#f0f0f0]">{summary.activity_name}</td>
-                    <td className="py-2.5 pr-4 text-[#f0f0f0]">{summary.submissions}</td>
-                    <td className="py-2.5 pr-4 text-[#f0f0f0]">
-                      {summary.average_grade !== null
-                        ? summary.average_grade.toFixed(1)
-                        : '—'}
+                {activities.map(a => (
+                  <tr key={a.actividad_id} className="border-b border-[#2e2e2e]">
+                    <td className="py-2.5 pr-4 text-[#f0f0f0] font-mono text-xs">
+                      {a.actividad_id.slice(0, 8)}…
                     </td>
-                    <td className="py-2.5 text-[#f0f0f0]">{summary.late_count}</td>
+                    <td className="py-2.5 pr-4 text-[#f0f0f0]">{a.submission_count}</td>
+                    <td className="py-2.5 pr-4 text-[#f0f0f0]">
+                      {a.avg_grade !== null ? a.avg_grade.toFixed(1) : '—'}
+                    </td>
+                    <td className="py-2.5 pr-4 text-[#f0f0f0]">{a.late_count}</td>
+                    <td className="py-2.5 text-[#f0f0f0]">{a.flagged_count}</td>
                   </tr>
                 ))}
               </tbody>
@@ -73,12 +96,10 @@ export function CourseAnalyticsPage() {
         )}
       </div>
 
-      {/* Overall grade distribution */}
-      <div className="bg-[#1a1a1a] border border-[#2e2e2e] rounded-xl p-5">
-        <h2 className="text-[#f0f0f0] font-medium mb-4">Distribución General</h2>
-        {isEmpty || data.overall_grade_distribution.length === 0 ? (
-          <p className="text-[#888888] text-sm">Sin datos de calificaciones aún.</p>
-        ) : (
+      {/* Grade distribution */}
+      {!isEmpty && activities[0] && (
+        <div className="bg-[#1a1a1a] border border-[#2e2e2e] rounded-xl p-5">
+          <h2 className="text-[#f0f0f0] font-medium mb-4">Distribución de Notas</h2>
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[#888888] border-b border-[#2e2e2e] text-left">
@@ -87,16 +108,21 @@ export function CourseAnalyticsPage() {
               </tr>
             </thead>
             <tbody>
-              {data.overall_grade_distribution.map(bucket => (
-                <tr key={bucket.range_label} className="border-b border-[#2e2e2e]">
-                  <td className="py-2.5 pr-4 text-[#f0f0f0]">{bucket.range_label}</td>
+              {[
+                { label: '0 – 49', count: activities.reduce((s, a) => s + a.grade_distribution.range_0_49, 0) },
+                { label: '50 – 69', count: activities.reduce((s, a) => s + a.grade_distribution.range_50_69, 0) },
+                { label: '70 – 89', count: activities.reduce((s, a) => s + a.grade_distribution.range_70_89, 0) },
+                { label: '90 – 100', count: activities.reduce((s, a) => s + a.grade_distribution.range_90_100, 0) },
+              ].map(bucket => (
+                <tr key={bucket.label} className="border-b border-[#2e2e2e]">
+                  <td className="py-2.5 pr-4 text-[#f0f0f0]">{bucket.label}</td>
                   <td className="py-2.5 text-[#f0f0f0]">{bucket.count}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

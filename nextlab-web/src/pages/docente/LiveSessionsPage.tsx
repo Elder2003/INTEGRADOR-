@@ -49,7 +49,7 @@ export function LiveSessionsPage() {
 
       {error && <ErrorMessage message={error} />}
 
-      {data?.sessions.length === 0 ? (
+      {(data?.sessions?.length ?? 0) === 0 ? (
         <p className="text-[#888888]">No hay sesiones activas en este momento.</p>
       ) : (
         <div className="bg-[#1a1a1a] border border-[#2e2e2e] rounded-lg overflow-hidden">
@@ -63,7 +63,7 @@ export function LiveSessionsPage() {
               </tr>
             </thead>
             <tbody>
-              {data?.sessions.map((entry) => (
+              {data?.sessions?.map((entry) => (
                 <tr
                   key={entry.session_id}
                   onClick={() =>

@@ -22,7 +22,7 @@ export function SubmissionsPage() {
     Promise.all([
       listSubmissions(cid, aid),
       listConfigChanges(cid, aid),
-      getActividad(aid),
+      getActividad(cid, aid),
       listActivityAppeals(aid).catch(() => []),
     ])
       .then(([submData, changesData, actData, appeals]) => {

@@ -37,7 +37,7 @@ func (r *Repository) StudentEnrolledInActividad(ctx context.Context, studentID, 
 func (r *Repository) GetActividadInfo(ctx context.Context, actividadID uuid.UUID) (*ActividadInfo, error) {
 	a := &ActividadInfo{}
 	err := r.db.QueryRow(ctx, `
-		SELECT a.id, a.docente_id, a.tipo, a.deadline, a.late_submission_allowed, a.has_submissions, c.is_active, a.trace_enabled
+		SELECT a.id, c.docente_id, a.tipo, a.deadline, a.late_submission_allowed, a.has_submissions, c.is_active, a.trace_enabled
 		FROM actividades a
 		JOIN cursos c ON c.id = a.curso_id
 		WHERE a.id = $1`,
@@ -56,13 +56,15 @@ func (r *Repository) GetSubmissionByStudent(ctx context.Context, studentID, acti
 	err := r.db.QueryRow(ctx, `
 		SELECT id, student_id, actividad_id, storage_key, original_filename,
 		       file_size_bytes, mime_type, submitted_at, is_late,
-		       edit_window_expires_at, last_replaced_at, created_at
+		       edit_window_expires_at, last_replaced_at, created_at,
+		       exam_answer, session_id
 		FROM submissions
 		WHERE student_id = $1 AND actividad_id = $2`,
 		studentID, actividadID).Scan(
 		&s.ID, &s.StudentID, &s.ActividadID, &s.StorageKey, &s.OriginalFilename,
 		&s.FileSizeBytes, &s.MimeType, &s.SubmittedAt, &s.IsLate,
 		&s.EditWindowExpiresAt, &s.LastReplacedAt, &s.CreatedAt,
+		&s.ExamAnswer, &s.SessionID,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -76,17 +78,50 @@ func (r *Repository) GetSubmissionByID(ctx context.Context, id uuid.UUID) (*Subm
 	err := r.db.QueryRow(ctx, `
 		SELECT id, student_id, actividad_id, storage_key, original_filename,
 		       file_size_bytes, mime_type, submitted_at, is_late,
-		       edit_window_expires_at, last_replaced_at, created_at
+		       edit_window_expires_at, last_replaced_at, created_at,
+		       exam_answer, session_id
 		FROM submissions WHERE id = $1`,
 		id).Scan(
 		&s.ID, &s.StudentID, &s.ActividadID, &s.StorageKey, &s.OriginalFilename,
 		&s.FileSizeBytes, &s.MimeType, &s.SubmittedAt, &s.IsLate,
 		&s.EditWindowExpiresAt, &s.LastReplacedAt, &s.CreatedAt,
+		&s.ExamAnswer, &s.SessionID,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	return s, err
+}
+
+// InsertExamSubmission inserts an exam-answer submission (no file storage).
+func (r *Repository) InsertExamSubmission(ctx context.Context, s *Submission) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO submissions
+		  (id, student_id, actividad_id, original_filename, file_size_bytes,
+		   mime_type, submitted_at, is_late, exam_answer, session_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+		s.ID, s.StudentID, s.ActividadID, s.OriginalFilename, s.FileSizeBytes,
+		s.MimeType, s.SubmittedAt, s.IsLate, s.ExamAnswer, s.SessionID,
+	)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(ctx,
+		`UPDATE actividades SET has_submissions = true WHERE id = $1 AND has_submissions = false`,
+		s.ActividadID,
+	)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 // ─── Write queries ────────────────────────────────────────────────────────────
@@ -123,6 +158,23 @@ func (r *Repository) InsertSubmission(ctx context.Context, s *Submission) error 
 	return tx.Commit(ctx)
 }
 
+// GetActiveExamSessionID returns the active exam session ID for a student+actividad, or nil.
+func (r *Repository) GetActiveExamSessionID(ctx context.Context, studentID, actividadID uuid.UUID) (*uuid.UUID, error) {
+	var sid uuid.UUID
+	err := r.db.QueryRow(ctx, `
+		SELECT id FROM exam_sessions
+		WHERE student_id = $1 AND actividad_id = $2 AND status = 'active'
+		LIMIT 1`,
+		studentID, actividadID).Scan(&sid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &sid, nil
+}
+
 // UpdateSubmission replaces the file metadata on an existing submission in a transaction.
 func (r *Repository) UpdateSubmission(ctx context.Context, studentID, actividadID uuid.UUID,
 	newKey, filename, mimeType string, size int64, submittedAt time.Time, isLate bool) error {
@@ -155,15 +207,15 @@ func (r *Repository) UpdateSubmission(ctx context.Context, studentID, actividadI
 }
 
 // DeleteSubmission removes the submission row and returns the storage key for MinIO cleanup.
-func (r *Repository) DeleteSubmission(ctx context.Context, studentID, actividadID uuid.UUID) (string, error) {
-	var key string
+func (r *Repository) DeleteSubmission(ctx context.Context, studentID, actividadID uuid.UUID) (*string, error) {
+	var key *string
 	err := r.db.QueryRow(ctx, `
 		DELETE FROM submissions
 		WHERE student_id = $1 AND actividad_id = $2
 		RETURNING storage_key`,
 		studentID, actividadID).Scan(&key)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil
+		return nil, nil
 	}
 	return key, err
 }
@@ -197,13 +249,14 @@ func (r *Repository) VerifyCodocenteGrantForActividad(ctx context.Context, activ
 // Access must already be verified by the caller.
 func (r *Repository) GetSubmissionsByActividad(ctx context.Context, actividadID uuid.UUID) ([]SubmissionListItem, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT s.id, u.id, u.name, u.email,
+		SELECT s.id, u.id, u.full_name, u.email,
 		       s.original_filename, s.file_size_bytes, s.mime_type,
-		       s.submitted_at, s.is_late, s.edit_window_expires_at, s.last_replaced_at
+		       s.submitted_at, s.is_late, s.edit_window_expires_at, s.last_replaced_at,
+		       s.session_id
 		FROM submissions s
 		JOIN users u ON u.id = s.student_id
 		WHERE s.actividad_id = $1
-		ORDER BY u.name ASC`,
+		ORDER BY u.full_name ASC`,
 		actividadID)
 	if err != nil {
 		return nil, err
@@ -219,6 +272,7 @@ func (r *Repository) GetSubmissionsByActividad(ctx context.Context, actividadID 
 			&item.Student.ID, &item.Student.Name, &item.Student.Email,
 			&item.OriginalFilename, &item.FileSizeBytes, &item.MimeType,
 			&item.SubmittedAt, &item.IsLate, &expiresAt, &item.LastReplacedAt,
+			&item.SessionID,
 		)
 		if err != nil {
 			return nil, err
@@ -335,7 +389,7 @@ func (r *Repository) GetConfigChanges(ctx context.Context, actividadID, cursoID,
 
 func (r *Repository) queryConfigChanges(ctx context.Context, actividadID uuid.UUID) ([]ConfigChangeResponse, error) {
 	rows, err := r.db.Query(ctx, `
-		SELECT cc.id, u.id, u.name, cc.field_name, cc.previous_value, cc.new_value, cc.changed_at
+		SELECT cc.id, u.id, u.full_name, cc.field_name, cc.previous_value, cc.new_value, cc.changed_at
 		FROM actividad_config_changes cc
 		JOIN users u ON u.id = cc.changed_by
 		WHERE cc.actividad_id = $1

@@ -33,7 +33,7 @@ export function EditActividadPage() {
 
   useEffect(() => {
     if (!aid) return
-    getActividad(aid)
+    getActividad(cursoId!, aid)
       .then(act => {
         setTitle(act.title)
         setTipo(act.tipo)
@@ -52,7 +52,7 @@ export function EditActividadPage() {
     setSubmitting(true)
     setError(null)
     try {
-      await updateActividad(aid, {
+      await updateActividad(cursoId!, aid, {
         title: title.trim(),
         tipo,
         deadline: toISODeadline(deadline),

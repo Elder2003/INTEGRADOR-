@@ -19,7 +19,7 @@ CREATE INDEX IF NOT EXISTS idx_docente_chunks_fts    ON rag_docente_chunks    US
 CREATE OR REPLACE FUNCTION update_rag_search_vector()
 RETURNS TRIGGER AS $$
 BEGIN
-  NEW.search_vector := to_tsvector('pg_catalog.spanish', coalesce(NEW.content, ''));
+  NEW.search_vector := to_tsvector('pg_catalog.spanish', coalesce(NEW.chunk_text, ''));
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -33,5 +33,5 @@ BEFORE INSERT OR UPDATE ON rag_docente_chunks
 FOR EACH ROW EXECUTE FUNCTION update_rag_search_vector();
 
 -- Backfill existing chunks
-UPDATE rag_curricular_chunks SET search_vector = to_tsvector('pg_catalog.spanish', coalesce(content, ''));
-UPDATE rag_docente_chunks    SET search_vector = to_tsvector('pg_catalog.spanish', coalesce(content, ''));
+UPDATE rag_curricular_chunks SET search_vector = to_tsvector('pg_catalog.spanish', coalesce(chunk_text, ''));
+UPDATE rag_docente_chunks    SET search_vector = to_tsvector('pg_catalog.spanish', coalesce(chunk_text, ''));

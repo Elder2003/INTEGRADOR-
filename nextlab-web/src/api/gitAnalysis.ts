@@ -3,6 +3,15 @@ import { ApiError } from '../types'
 import type { AxiosError } from 'axios'
 import type { SubmissionResponse, GitAnalysisReport, AIReport, DetectionReport } from '../types/academic'
 
+export async function getSessionDetectionReport(sessionId: string): Promise<DetectionReport> {
+  try {
+    const res = await api.get<DetectionReport>(`/sessions/${sessionId}/detection-report`)
+    return res.data
+  } catch (err) {
+    toApiError(err)
+  }
+}
+
 interface ApiErrorBody {
   error: string
   message: string

@@ -3,6 +3,7 @@ package tracing
 import (
 	"errors"
 	"strconv"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -124,6 +125,94 @@ func getTracePagedHandler(svc *Service) fiber.Handler {
 func parseIntQuery(s string) (int, error) {
 	n, err := strconv.Atoi(s)
 	return n, err
+}
+
+func listActiveSessionsHandler(svc *Service) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		actividadID, err := uuid.Parse(c.Params("aid"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid_activity_id"})
+		}
+		docenteID, err := parseUserID(c)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		}
+
+		rows, err := svc.repo.GetActiveSessionsByActivity(c.Context(), actividadID, docenteID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal_error"})
+		}
+
+		entries := make([]ActiveSessionEntry, len(rows))
+		for i, row := range rows {
+			entries[i] = ActiveSessionEntry{
+				SessionID: row.ID.String(),
+				Student: StudentInfo{
+					ID:    row.StudentID.String(),
+					Name:  row.StudentName,
+					Email: row.StudentEmail,
+				},
+				StartedAt:  row.StartedAt,
+				EventCount: row.EventCount,
+			}
+		}
+
+		return c.JSON(ActiveSessionsListResponse{
+			ActividadID: actividadID.String(),
+			Sessions:    entries,
+		})
+	}
+}
+
+func getSessionEventsHandler(svc *Service) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		sessionID, err := uuid.Parse(c.Params("sid"))
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid_session_id"})
+		}
+		docenteID, err := parseUserID(c)
+		if err != nil {
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+		}
+
+		owns, err := svc.repo.VerifyDocenteOwnsSession(c.Context(), sessionID, docenteID)
+		if err != nil || !owns {
+			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
+		}
+
+		events, err := svc.repo.GetAllEvents(c.Context(), sessionID)
+		if err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal_error"})
+		}
+
+		var sinceTime time.Time
+		if s := c.Query("since"); s != "" {
+			sinceTime, _ = time.Parse(time.RFC3339Nano, s)
+		}
+
+		items := make([]LiveEventItem, 0, len(events))
+		for _, e := range events {
+			if !sinceTime.IsZero() && !e.ReceivedAt.After(sinceTime) {
+				continue
+			}
+			item := LiveEventItem{
+				ID:        e.ID.String(),
+				SessionID: e.SessionID.String(),
+				Type:      e.EventType,
+				Timestamp: e.ReceivedAt,
+			}
+			if v, ok := e.Metadata["content"].(string); ok {
+				item.Content = &v
+			}
+			items = append(items, item)
+		}
+
+		return c.JSON(LiveEventsResponse{
+			SessionID: sessionID.String(),
+			Events:    items,
+			Total:     len(items),
+		})
+	}
 }
 
 func verifyTraceHandler(svc *Service) fiber.Handler {

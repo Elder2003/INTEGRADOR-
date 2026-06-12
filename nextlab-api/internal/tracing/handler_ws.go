@@ -142,13 +142,19 @@ func makeWSHandler(hub *Hub, svc *Service) func(*websocket.Conn) {
 				break
 			}
 
+			// Translate frontend event types to backend canonical types
+			backendType, drop := normalizeEventType(event.Type)
+			if drop {
+				continue
+			}
+
 			// Build metadata from full raw payload (minus protocol fields)
 			var rawMap map[string]any
 			_ = json.Unmarshal(msg, &rawMap)
 			delete(rawMap, "type")
 			delete(rawMap, "client_ts")
 
-			ack, err := svc.AppendEvent(ctx, sessionID, event.Type, rawMap)
+			ack, err := svc.AppendEvent(ctx, sessionID, backendType, rawMap)
 			if err != nil {
 				if err == ErrSessionClosed {
 					sendJSON(c, WSSessionClosed{Type: "session_closed", Reason: "session_already_closed", ClosedAt: time.Now().UTC()})
@@ -234,4 +240,27 @@ func sendJSON(c *websocket.Conn, v any) {
 		return
 	}
 	_ = c.WriteMessage(websocket.TextMessage, b)
+}
+
+// normalizeEventType translates frontend event names to the canonical backend types stored in the DB.
+// Returns (backendType, drop). drop=true means the event should be silently discarded.
+func normalizeEventType(t string) (string, bool) {
+	switch t {
+	case "copy":
+		return "clipboard_copy", false
+	case "paste":
+		return "clipboard_paste", false
+	case "focus_out":
+		return "tab_blur", false
+	case "focus_in":
+		return "tab_focus", false
+	case "keystroke":
+		return "keystroke", false
+	case "heartbeat", "session_open", "session_close",
+		"tab_blur", "tab_focus", "window_blur", "window_focus",
+		"clipboard_copy", "clipboard_paste":
+		return t, false
+	default:
+		return "", true
+	}
 }

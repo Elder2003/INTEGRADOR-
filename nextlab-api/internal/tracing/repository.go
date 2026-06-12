@@ -398,6 +398,42 @@ func (r *Repository) GetAllEvents(ctx context.Context, sessionID uuid.UUID) ([]T
 	return events, rows.Err()
 }
 
+// GetActiveSessionsByActivity returns all active exam sessions for an actividad,
+// verifying ownership via the calling docente's ID.
+func (r *Repository) GetActiveSessionsByActivity(ctx context.Context, actividadID, docenteID uuid.UUID) ([]ActiveSessionRow, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT es.id, es.student_id, es.actividad_id, es.submission_id, es.status,
+		       es.started_at, es.closed_at, es.last_heartbeat_at, es.last_event_hash, es.event_count,
+		       u.full_name, u.email
+		FROM exam_sessions es
+		JOIN actividades a ON a.id = es.actividad_id
+		JOIN cursos c ON c.id = a.curso_id
+		JOIN users u ON u.id = es.student_id
+		WHERE es.actividad_id = $1
+		  AND c.docente_id = $2
+		  AND es.status = 'active'
+		ORDER BY es.started_at DESC
+	`, actividadID, docenteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []ActiveSessionRow
+	for rows.Next() {
+		var row ActiveSessionRow
+		if err := rows.Scan(
+			&row.ID, &row.StudentID, &row.ActividadID, &row.SubmissionID, &row.Status,
+			&row.StartedAt, &row.ClosedAt, &row.LastHeartbeatAt, &row.LastEventHash, &row.EventCount,
+			&row.StudentName, &row.StudentEmail,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
 // ─── Scan helpers ─────────────────────────────────────────────────────────────
 
 func scanSessions(rows pgx.Rows) ([]ExamSession, error) {

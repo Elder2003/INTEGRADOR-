@@ -176,6 +176,26 @@ func (r *DetectionRepository) GetSubmissionStorageKey(ctx context.Context, submi
 	return storageKey, originalFilename, err
 }
 
+// GetExamContext returns the student's exam_answer text and the activity instructions.
+func (r *DetectionRepository) GetExamContext(ctx context.Context, submissionID, actividadID uuid.UUID) (examAnswer, instructions string, err error) {
+	var ea *string
+	var ins string
+	err = r.db.QueryRow(ctx, `
+		SELECT s.exam_answer, a.instructions
+		FROM submissions s
+		JOIN actividades a ON a.id = s.actividad_id
+		WHERE s.id = $1`,
+		submissionID,
+	).Scan(&ea, &ins)
+	if err != nil {
+		return "", "", err
+	}
+	if ea != nil {
+		examAnswer = *ea
+	}
+	return examAnswer, ins, nil
+}
+
 func (r *DetectionRepository) GetCurricularScope(ctx context.Context, actividadID uuid.UUID) (carrera, codigoMateria string, semestre int, err error) {
 	err = r.db.QueryRow(ctx, `
 		SELECT c.carrera, c.codigo_materia, c.semestre

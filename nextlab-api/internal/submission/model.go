@@ -12,7 +12,7 @@ type Submission struct {
 	ID                   uuid.UUID  `json:"id"`
 	StudentID            uuid.UUID  `json:"student_id"`
 	ActividadID          uuid.UUID  `json:"actividad_id"`
-	StorageKey           string     `json:"-"`
+	StorageKey           *string    `json:"-"`
 	OriginalFilename     string     `json:"original_filename"`
 	FileSizeBytes        int64      `json:"file_size_bytes"`
 	MimeType             string     `json:"mime_type"`
@@ -21,6 +21,8 @@ type Submission struct {
 	EditWindowExpiresAt  *time.Time `json:"edit_window_expires_at"`
 	LastReplacedAt       *time.Time `json:"last_replaced_at"`
 	CreatedAt            time.Time  `json:"created_at"`
+	ExamAnswer           *string    `json:"exam_answer"`
+	SessionID            *uuid.UUID `json:"session_id"`
 }
 
 // IsLocked returns true when the submission can no longer be modified by the student.
@@ -46,6 +48,7 @@ type ActivityConfigChange struct {
 type SubmissionResponse struct {
 	ID                  uuid.UUID  `json:"id"`
 	ActividadID         uuid.UUID  `json:"actividad_id"`
+	SessionID           *uuid.UUID `json:"session_id"`
 	OriginalFilename    string     `json:"original_filename"`
 	FileSizeBytes       int64      `json:"file_size_bytes"`
 	MimeType            string     `json:"mime_type"`
@@ -54,12 +57,14 @@ type SubmissionResponse struct {
 	EditWindowExpiresAt *time.Time `json:"edit_window_expires_at"`
 	IsLocked            bool       `json:"is_locked"`
 	LastReplacedAt      *time.Time `json:"last_replaced_at,omitempty"`
+	ExamAnswer          *string    `json:"exam_answer"`
 }
 
 func toResponse(s *Submission) SubmissionResponse {
 	return SubmissionResponse{
 		ID:                  s.ID,
 		ActividadID:         s.ActividadID,
+		SessionID:           s.SessionID,
 		OriginalFilename:    s.OriginalFilename,
 		FileSizeBytes:       s.FileSizeBytes,
 		MimeType:            s.MimeType,
@@ -68,6 +73,7 @@ func toResponse(s *Submission) SubmissionResponse {
 		EditWindowExpiresAt: s.EditWindowExpiresAt,
 		IsLocked:            s.IsLocked(),
 		LastReplacedAt:      s.LastReplacedAt,
+		ExamAnswer:          s.ExamAnswer,
 	}
 }
 
@@ -88,6 +94,7 @@ type SubmissionListItem struct {
 	IsLocked            bool       `json:"is_locked"`
 	LastReplacedAt      *time.Time `json:"last_replaced_at,omitempty"`
 	EditWindowExpiresAt *time.Time `json:"edit_window_expires_at,omitempty"`
+	SessionID           *uuid.UUID `json:"session_id"`
 }
 
 type SubmissionListResponse struct {

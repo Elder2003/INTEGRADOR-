@@ -26,6 +26,7 @@ func RegisterRoutes(
 	// ─── Student — submission lifecycle ──────────────────────────────────────
 	studentMW := []fiber.Handler{authMW, roleGuard("estudiante")}
 	app.Post("/actividades/:aid/submission", append(studentMW, UploadHandler(svc))...)
+	app.Post("/actividades/:aid/submission/exam", append(studentMW, ExamAnswerHandler(svc))...)
 	app.Put("/actividades/:aid/submission", append(studentMW, ReplaceHandler(svc))...)
 	app.Delete("/actividades/:aid/submission", append(studentMW, DeleteHandler(svc))...)
 	app.Get("/actividades/:aid/submission", append(studentMW, GetSubmissionHandler(svc))...)

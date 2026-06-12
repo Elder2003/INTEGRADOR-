@@ -85,6 +85,9 @@ func main() {
 	// Build detection dependencies
 	aiRepo := ai.NewRepository(pgPool)
 	aiSvc := ai.NewService(aiRepo, cfg)
+	aiSvc.SeedIfEmpty(ctx)
+	aiSvc.StartCacheRefresh(ctx)
+	slog.Info("ai mode loaded", "cloud_url", cfg.AICloudURL)
 	embedClient := rag.NewEmbedClient(cfg)
 	ragSvc := rag.NewRetrieveService(
 		rag.NewCurricularRepository(pgPool),
