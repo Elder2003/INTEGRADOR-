@@ -300,7 +300,7 @@ export function SubmissionDetailPage() {
         </div>
       )}
 
-      {(item.repo_url || actividadFlags?.ai_enabled || actividadFlags?.detection_enabled) && (
+      {(item.repo_url || item.session_id) && (
         <div className="border-t border-[#2e2e2e] pt-4 mt-4 space-y-2">
           <h2 className="text-base font-semibold text-[#f0f0f0] mb-3">Análisis y Reportes</h2>
           {item.repo_url && (
@@ -311,20 +311,13 @@ export function SubmissionDetailPage() {
               Ver análisis Git
             </Link>
           )}
-          {actividadFlags?.ai_enabled && (
-            <Link
-              to={`${routePrefix}/cursos/${cid}/actividades/${aid}/submissions/${sid}/ai-report`}
-              className="flex items-center gap-2 text-sm text-[#f0f0f0] border border-[#2e2e2e] rounded-lg px-4 py-2 hover:border-[#E85D24] transition-colors w-fit"
-            >
-              Ver informe IA
-            </Link>
-          )}
-          {actividadFlags?.detection_enabled && (
+          {item.session_id && (
             <Link
               to={`${routePrefix}/cursos/${cid}/actividades/${aid}/submissions/${sid}/detection-report`}
+              state={{ sessionId: item.session_id }}
               className="flex items-center gap-2 text-sm text-[#f0f0f0] border border-[#2e2e2e] rounded-lg px-4 py-2 hover:border-[#E85D24] transition-colors w-fit"
             >
-              Ver informe de detección
+              Ver informe de detección e IA
             </Link>
           )}
         </div>

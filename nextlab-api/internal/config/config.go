@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -43,6 +44,16 @@ type Config struct {
 	HeuristicClipWeight     int
 	HeuristicGapWeight      int
 	HeuristicHighThreshold  int
+
+	GitAllowedHosts    []string
+	GitMaxRepoSizeMB   int
+	GitCloneTimeoutSec int
+
+	AIRateLimitRequests  int
+	AIRateLimitWindowSec int
+
+	SessionAbandonedTimeoutMin int
+	MLModelDir                 string
 }
 
 func Load() (*Config, error) {
@@ -82,10 +93,23 @@ func Load() (*Config, error) {
 
 	cfg.AIEmbedURL       = getenv("AI_EMBED_URL", cfg.AICloudURL)
 	cfg.AIEmbedModel     = getenv("AI_EMBED_MODEL", "text-embedding-3-small")
-	cfg.AIEmbedDimension = parseInt(getenv("AI_EMBED_DIMENSION", "1536"))
+	cfg.AIEmbedDimension = parseInt(getenv("AI_EMBED_DIMENSION", "768"))
 	cfg.RAGChunkTokens   = parseInt(getenv("RAG_CHUNK_TOKENS", "512"))
 	cfg.RAGChunkOverlap  = parseInt(getenv("RAG_CHUNK_OVERLAP", "64"))
 	cfg.RAGTokenBudget   = parseInt(getenv("RAG_TOKEN_BUDGET", "2048"))
+
+	// AI rate limiting (M15)
+	cfg.AIRateLimitRequests  = parseInt(getenv("AI_RATE_LIMIT_REQUESTS", "10"))
+	cfg.AIRateLimitWindowSec = parseInt(getenv("AI_RATE_LIMIT_WINDOW_SEC", "60"))
+
+	// Git analysis sandbox (M14)
+	cfg.GitAllowedHosts    = strings.Split(getenv("GIT_ALLOWED_HOSTS", "github.com,gitlab.com,bitbucket.org"), ",")
+	cfg.GitMaxRepoSizeMB   = parseInt(getenv("GIT_MAX_REPO_SIZE_MB", "100"))
+	cfg.GitCloneTimeoutSec = parseInt(getenv("GIT_CLONE_TIMEOUT_SEC", "300"))
+
+	// M17: verde largo plazo
+	cfg.SessionAbandonedTimeoutMin = parseInt(getenv("SESSION_ABANDONED_TIMEOUT_MIN", "15"))
+	cfg.MLModelDir = getenv("ML_MODEL_DIR", "./models")
 
 	// Detection Engine (M8) — configurable per institution to tune false-positive rates
 	cfg.HeuristicTabWeight     = parseInt(getenv("HEURISTIC_TAB_WEIGHT", "5"))

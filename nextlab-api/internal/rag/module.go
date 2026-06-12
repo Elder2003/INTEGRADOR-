@@ -20,6 +20,7 @@ func RegisterRoutes(
 	authMW fiber.Handler,
 	roleGuard func(roles ...string) fiber.Handler,
 	aiSvc *ai.Service,
+	rateLimitMW fiber.Handler,
 ) {
 	// Ensure rag-docs bucket exists
 	ctx := context.Background()
@@ -44,10 +45,10 @@ func RegisterRoutes(
 	curr := app.Group("/rag/curricular", authMW)
 	curr.Post("/ingest", roleGuard("admin"), ingestCurricularHandler(ingestSvc))
 	curr.Post("/query", retrieveCurricularHandler(retrieveSvc))
-	curr.Post("/solve", roleGuard("admin"), solveProblemHandler(curRepo, embedClient, aiSvc))
+	curr.Post("/solve", roleGuard("admin"), rateLimitMW, solveProblemHandler(curRepo, embedClient, aiSvc))
 
 	// Docente RAG
 	doc := app.Group("/rag/docente", authMW, roleGuard("docente"))
 	doc.Post("/ingest", ingestDocenteHandler(ingestSvc, docRepo))
-	doc.Post("/query", retrieveDocenteHandler(retrieveSvc, docRepo))
+	doc.Post("/query", rateLimitMW, retrieveDocenteHandler(retrieveSvc, docRepo))
 }

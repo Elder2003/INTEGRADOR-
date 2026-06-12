@@ -5,7 +5,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func ReviewAppealHandler(repo *Repository) fiber.Handler {
+func ReviewAppealHandler(repo *Repository, notifSvc NotificationPublisher, webhookTrigger WebhookTrigger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, err := uuid.Parse(c.Params("id"))
 		if err != nil {
@@ -53,6 +53,11 @@ func ReviewAppealHandler(repo *Repository) fiber.Handler {
 				return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal_error"})
 			}
 			appeal.Status = "escalated"
+			if notifSvc != nil {
+				go notifSvc.Publish(appeal.FiledBy, "appeal_updated", map[string]any{
+					"appeal_id": id, "new_status": "escalated", "type": appeal.Type,
+				})
+			}
 			return c.Status(fiber.StatusOK).JSON(fiber.Map{"appeal": appeal})
 		}
 
@@ -65,11 +70,19 @@ func ReviewAppealHandler(repo *Repository) fiber.Handler {
 		}
 		appeal.Status = "resolved"
 
+		appealPayload := map[string]any{"appeal_id": id, "new_status": "resolved", "type": appeal.Type}
+		if notifSvc != nil {
+			go notifSvc.Publish(appeal.FiledBy, "appeal_updated", appealPayload)
+		}
+		if webhookTrigger != nil {
+			webhookTrigger.TriggerAsync("appeal.updated", appealPayload)
+		}
+
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"appeal": appeal, "decision": decision})
 	}
 }
 
-func EscalateAppealHandler(repo *Repository) fiber.Handler {
+func EscalateAppealHandler(repo *Repository, notifSvc NotificationPublisher, webhookTrigger WebhookTrigger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, err := uuid.Parse(c.Params("id"))
 		if err != nil {
@@ -108,11 +121,17 @@ func EscalateAppealHandler(repo *Repository) fiber.Handler {
 		}
 		appeal.Status = "escalated"
 
+		if notifSvc != nil {
+			go notifSvc.Publish(appeal.FiledBy, "appeal_updated", map[string]any{
+				"appeal_id": id, "new_status": "escalated", "type": appeal.Type,
+			})
+		}
+
 		return c.Status(fiber.StatusOK).JSON(appeal)
 	}
 }
 
-func AdminReviewAppealHandler(repo *Repository) fiber.Handler {
+func AdminReviewAppealHandler(repo *Repository, notifSvc NotificationPublisher, webhookTrigger WebhookTrigger) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		id, err := uuid.Parse(c.Params("id"))
 		if err != nil {
@@ -159,6 +178,12 @@ func AdminReviewAppealHandler(repo *Repository) fiber.Handler {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal_error"})
 		}
 		appeal.Status = "admin_resolved"
+
+		if notifSvc != nil {
+			go notifSvc.Publish(appeal.FiledBy, "appeal_updated", map[string]any{
+				"appeal_id": id, "new_status": "admin_resolved", "type": appeal.Type,
+			})
+		}
 
 		return c.Status(fiber.StatusOK).JSON(fiber.Map{"appeal": appeal, "decision": decision})
 	}

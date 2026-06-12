@@ -164,6 +164,28 @@ func (r *DocenteRepository) QuerySimilar(ctx context.Context, docenteID, cursoID
 	return scanDocenteChunksWithScore(rows)
 }
 
+// LexicalSearchDocente performs full-text BM25-style search using tsvector for docente chunks.
+func (r *DocenteRepository) LexicalSearchDocente(ctx context.Context, docenteID, cursoID uuid.UUID, query string, limit int) ([]ChunkResult, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT c.document_id, c.chunk_index, c.chunk_text,
+		       ts_rank(c.search_vector, plainto_tsquery('pg_catalog.spanish', $3))::float4 AS score,
+		       d.docente_id, d.curso_id
+		FROM rag_docente_chunks c
+		JOIN rag_docente d ON d.id = c.document_id
+		WHERE d.docente_id=$1 AND d.curso_id=$2
+		  AND d.is_rubric=FALSE AND c.status='active'
+		  AND c.search_vector @@ plainto_tsquery('pg_catalog.spanish', $3)
+		ORDER BY score DESC
+		LIMIT $4`,
+		docenteID, cursoID, query, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanDocenteChunksWithScore(rows)
+}
+
 // VerifyDocenteOwnsCourse returns true if the given docente owns (or teaches) the given curso.
 func (r *DocenteRepository) VerifyDocenteOwnsCourse(ctx context.Context, docenteID, cursoID uuid.UUID) (bool, error) {
 	var count int

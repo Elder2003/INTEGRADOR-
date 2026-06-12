@@ -40,7 +40,7 @@ export function ActividadDetailPage() {
 
   useEffect(() => {
     if (!aid) return
-    getActividad(aid)
+    getActividad(cursoId!, aid)
       .then(setActividad)
       .catch(err => setError((err as ApiError).message))
       .finally(() => setLoading(false))
@@ -50,7 +50,7 @@ export function ActividadDetailPage() {
     if (!aid) return
     setDeleting(true)
     try {
-      await deleteActividad(aid)
+      await deleteActividad(cursoId!, aid)
       navigate(`/docente/cursos/${cursoId}?tab=actividades`)
     } catch (err) {
       setDeleteError((err as ApiError).message)
@@ -65,7 +65,7 @@ export function ActividadDetailPage() {
     setTogglingLate(true)
     setToggleError(null)
     try {
-      const updated = await updateActividad(aid, {
+      const updated = await updateActividad(cursoId!, aid, {
         late_submission_allowed: !actividad.late_submission_allowed,
       })
       setActividad(updated)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/encrypt"
 
 	"github.com/Elder2003/nextlab-api/internal/alerts"
 )
@@ -121,7 +122,7 @@ func (s *InvestigacionService) SubmitToStage(ctx context.Context, studentID, act
 	}
 
 	_, err = s.mc.PutObject(ctx, s.bucket, fileKey, f, header.Size,
-		minio.PutObjectOptions{ContentType: header.Header.Get("Content-Type")})
+		minio.PutObjectOptions{ContentType: header.Header.Get("Content-Type"), ServerSideEncryption: encrypt.NewSSE()})
 	if err != nil {
 		return nil, fmt.Errorf("store file: %w", err)
 	}

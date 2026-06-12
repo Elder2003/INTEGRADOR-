@@ -1,5 +1,6 @@
 <!-- SPECKIT START -->
 For additional context about technologies to be used, project structure,
 shell commands, and other important information, read the current plan at
-`specs/013-appeals-final-audit/plan.md`
+`specs/017-verde-largo-plazo/plan.md`
+
 <!-- SPECKIT END -->

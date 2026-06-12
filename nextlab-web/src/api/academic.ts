@@ -101,9 +101,9 @@ export async function getActividades(cursoId: string): Promise<Actividad[]> {
   }
 }
 
-export async function getActividad(id: string): Promise<Actividad> {
+export async function getActividad(cursoId: string, id: string): Promise<Actividad> {
   try {
-    const res = await api.get<Actividad>(`/actividades/${id}`)
+    const res = await api.get<Actividad>(`/cursos/${cursoId}/actividades/${id}`)
     return res.data
   } catch (err) {
     toApiError(err)
@@ -119,18 +119,18 @@ export async function createActividad(cursoId: string, data: CreateActividadRequ
   }
 }
 
-export async function updateActividad(id: string, data: UpdateActividadRequest): Promise<Actividad> {
+export async function updateActividad(cursoId: string, id: string, data: UpdateActividadRequest): Promise<Actividad> {
   try {
-    const res = await api.put<Actividad>(`/actividades/${id}`, data)
+    const res = await api.put<Actividad>(`/cursos/${cursoId}/actividades/${id}`, data)
     return res.data
   } catch (err) {
     toApiError(err)
   }
 }
 
-export async function deleteActividad(id: string): Promise<void> {
+export async function deleteActividad(cursoId: string, id: string): Promise<void> {
   try {
-    await api.delete(`/actividades/${id}`)
+    await api.delete(`/cursos/${cursoId}/actividades/${id}`)
   } catch (err) {
     toApiError(err)
   }

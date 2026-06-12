@@ -306,8 +306,13 @@ func GitSubmitHandler(svc *GitAnalysisService) fiber.Handler {
 
 		sub, analysisStatus, err := svc.SubmitGitURL(c.Context(), cid, aid, req.RepoURL)
 		if err != nil {
-			if err.Error() == "invalid repo_url" {
-				return errResp(c, fiber.StatusBadRequest, "validation_error", "invalid repo_url")
+			switch err.Error() {
+			case "host_not_allowed":
+				return errResp(c, fiber.StatusUnprocessableEntity, "host_not_allowed",
+					"Only github.com, gitlab.com, bitbucket.org are accepted")
+			case "scheme_not_allowed":
+				return errResp(c, fiber.StatusUnprocessableEntity, "scheme_not_allowed",
+					"Only https:// URLs are accepted")
 			}
 			return mapError(c, err)
 		}

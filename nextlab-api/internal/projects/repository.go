@@ -361,13 +361,13 @@ func (r *Repository) ClaimNextGitAnalysisJob(ctx context.Context) (*GitAnalysisJ
 		 WHERE id = (
 		   SELECT j.id FROM git_analysis_jobs j
 		   JOIN git_analyses a ON a.id = j.git_analysis_id
-		   WHERE j.status = 'queued'
+		   WHERE j.status = 'queued' AND j.dead_at IS NULL
 		   ORDER BY j.queued_at
 		   FOR UPDATE SKIP LOCKED
 		   LIMIT 1
 		 )
-		 RETURNING id, git_analysis_id, status, retries, queued_at, started_at, completed_at`,
-	).Scan(&j.ID, &j.GitAnalysisID, &j.Status, &j.Retries, &j.QueuedAt, &j.StartedAt, &j.CompletedAt)
+		 RETURNING id, git_analysis_id, status, retries, max_retries, queued_at, started_at, completed_at`,
+	).Scan(&j.ID, &j.GitAnalysisID, &j.Status, &j.Retries, &j.MaxRetries, &j.QueuedAt, &j.StartedAt, &j.CompletedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -394,6 +394,13 @@ func (r *Repository) CompleteGitAnalysisJob(ctx context.Context, jobID uuid.UUID
 func (r *Repository) FailGitAnalysisJob(ctx context.Context, jobID uuid.UUID) error {
 	_, err := r.db.Exec(ctx,
 		`UPDATE git_analysis_jobs SET status='failed', retries=retries+1, completed_at=now() WHERE id=$1`, jobID)
+	return err
+}
+
+// MarkGitAnalysisJobDead permanently kills a git analysis job that has exhausted its retries.
+func (r *Repository) MarkGitAnalysisJobDead(ctx context.Context, jobID uuid.UUID, errMsg string) error {
+	_, err := r.db.Exec(ctx,
+		`UPDATE git_analysis_jobs SET status='dead', dead_at=NOW(), last_error=$2 WHERE id=$1`, jobID, errMsg)
 	return err
 }
 

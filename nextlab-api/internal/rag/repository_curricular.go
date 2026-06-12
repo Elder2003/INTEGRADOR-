@@ -271,6 +271,28 @@ func (r *CurricularRepository) GetInterdisciplinaryScopes(ctx context.Context, a
 	return scopes, rows.Err()
 }
 
+// LexicalSearchCurricular performs full-text BM25-style search using tsvector.
+func (r *CurricularRepository) LexicalSearchCurricular(ctx context.Context, carrera string, semestre int, codigoMateria string, query string, limit int) ([]ChunkResult, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT c.document_id, c.chunk_index, c.chunk_text,
+		       ts_rank(c.search_vector, plainto_tsquery('pg_catalog.spanish', $4))::float4 AS score,
+		       d.carrera, d.semestre, d.codigo_materia
+		FROM rag_curricular_chunks c
+		JOIN rag_curricular d ON d.id = c.document_id
+		WHERE d.carrera=$1 AND d.semestre=$2 AND d.codigo_materia=$3
+		  AND d.is_rubric=FALSE AND c.status='active'
+		  AND c.search_vector @@ plainto_tsquery('pg_catalog.spanish', $4)
+		ORDER BY score DESC
+		LIMIT $5`,
+		carrera, semestre, codigoMateria, query, limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanCurricularChunksWithScore(rows)
+}
+
 func scanCurricularChunks(rows pgx.Rows) ([]ChunkResult, error) {
 	var results []ChunkResult
 	for rows.Next() {

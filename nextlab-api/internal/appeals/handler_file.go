@@ -57,18 +57,24 @@ func FileAppealHandler(repo *Repository) fiber.Handler {
 			return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"error": "forbidden"})
 		}
 
-		open, err := repo.HasOpenAppeal(c.Context(), req.SessionID)
+		open, err := repo.HasOpenAppealOfType(c.Context(), req.SessionID, req.Type)
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal_error"})
 		}
 		if open {
-			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "conflict"})
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+				"error":   "duplicate_active_appeal",
+				"message": "An active appeal of this type already exists for this session",
+			})
 		}
 
 		appeal, err := repo.InsertAppeal(c.Context(), req, callerID)
 		if err != nil {
 			if strings.Contains(err.Error(), "unique") || strings.Contains(err.Error(), "duplicate") {
-				return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "conflict"})
+				return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+					"error":   "duplicate_active_appeal",
+					"message": "An active appeal of this type already exists for this session",
+				})
 			}
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "internal_error"})
 		}

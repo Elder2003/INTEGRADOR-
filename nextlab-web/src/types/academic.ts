@@ -347,17 +347,40 @@ export interface AIReport {
   sections?: AIReportSection[]
 }
 
-export interface FlaggedSegment {
-  source: string
-  match_percentage: number
-  content?: string
+export interface HeuristicResult {
+  session_id: string
+  score: number
+  flagged_categories: string[]
+  event_count: number
+  created_at: string
+}
+
+export interface LLMResult {
+  id: string
+  session_id: string
+  advisory_text: string
+  suggested_grade_range: string
+  backend_used: string
+  llm_status: string
+  created_at: string
 }
 
 export interface DetectionReport {
-  status: 'pending' | 'done' | 'error'
-  error_message?: string | null
-  similarity_score?: number
-  flagged_segments?: FlaggedSegment[]
+  session_id: string
+  student_id: string
+  actividad_id: string
+  heuristic: HeuristicResult | null
+  llm: LLMResult | null
+  llm_status: string
+  grade_decision: GradeDecisionResult | null
+}
+
+export interface GradeDecisionResult {
+  final_grade: number
+  suggested_grade_range?: string
+  override_reason?: string
+  decided_by: string
+  decided_at: string
 }
 
 // MW9 — Alerts & Analytics types
@@ -387,23 +410,38 @@ export interface StageBreakdown {
 }
 
 export interface ActivityAnalytics {
-  total_submissions: number
-  late_submissions: number
-  grade_distribution: GradeDistributionBucket[]
-  stage_breakdown: StageBreakdown | null
+  actividad_id: string
+  submission_count: number
+  pending_count: number
+  late_count: number
+  flagged_count: number
+  grade_distribution: GradeDistribution
+  avg_grade: number | null
+}
+
+export interface GradeDistribution {
+  range_0_49: number
+  range_50_69: number
+  range_70_89: number
+  range_90_100: number
 }
 
 export interface ActivitySummary {
   actividad_id: string
-  activity_name: string
-  submissions: number
-  average_grade: number | null
+  submission_count: number
+  pending_count: number
   late_count: number
+  flagged_count: number
+  grade_distribution: GradeDistribution
+  avg_grade: number | null
 }
 
 export interface CourseAnalytics {
-  activity_summaries: ActivitySummary[]
-  overall_grade_distribution: GradeDistributionBucket[]
+  curso_id: string
+  activities: ActivitySummary[]
+  total_submissions: number
+  avg_grade: number | null
+  flag_rate: number
 }
 
 // MW10 — Appeals types (M13 contract)

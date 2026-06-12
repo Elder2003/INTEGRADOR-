@@ -204,6 +204,14 @@ func (r *Repository) SetJobStreamID(ctx context.Context, jobID uuid.UUID, stream
 	return err
 }
 
+// MarkJobDead permanently kills a worker job that has exhausted its retries.
+func (r *Repository) MarkJobDead(ctx context.Context, jobID uuid.UUID, errMsg string) error {
+	_, err := r.db.Exec(ctx, `
+		UPDATE worker_jobs SET status='dead', dead_at=NOW(), error=$2 WHERE id=$1
+	`, jobID, errMsg)
+	return err
+}
+
 // MarkJobStatus updates a job's status and optional timestamps.
 func (r *Repository) MarkJobStatus(ctx context.Context, jobID uuid.UUID, status string, claimedAt *time.Time, doneAt *time.Time, errMsg *string) error {
 	_, err := r.db.Exec(ctx, `
@@ -222,9 +230,10 @@ func (r *Repository) MarkJobStatus(ctx context.Context, jobID uuid.UUID, status 
 func (r *Repository) GetOrphanedJobs(ctx context.Context) ([]WorkerJob, error) {
 	rows, err := r.db.Query(ctx, `
 		SELECT id, session_id, submission_id, stream_id, status, enqueued_at,
-		       claimed_at, done_at, attempt_count, error
+		       claimed_at, done_at, attempt_count, error, max_retries, dead_at
 		FROM worker_jobs
 		WHERE status IN ('pending', 'queued')
+		  AND status != 'dead'
 		  AND enqueued_at < NOW() - INTERVAL '60 seconds'
 	`)
 	if err != nil {
@@ -271,6 +280,20 @@ func (r *Repository) GetTimedOutSessions(ctx context.Context) ([]ExamSession, er
 	return scanSessions(rows)
 }
 
+// VerifyDocenteOwnsSession checks that the docente is owner of the curso containing the session's actividad.
+func (r *Repository) VerifyDocenteOwnsSession(ctx context.Context, sessionID, docenteID uuid.UUID) (bool, error) {
+	var exists bool
+	err := r.db.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM exam_sessions es
+			JOIN actividades a ON a.id = es.actividad_id
+			JOIN cursos c ON c.id = a.curso_id
+			WHERE es.id = $1 AND c.docente_id = $2
+		)
+	`, sessionID, docenteID).Scan(&exists)
+	return exists, err
+}
+
 // ─── Trace retrieval (docente) ────────────────────────────────────────────────
 
 // GetTraceBySubmission fetches the session and all trace events for a submission, role-scoped.
@@ -309,6 +332,44 @@ func (r *Repository) GetTraceBySubmission(ctx context.Context, submissionID, cal
 	return &s, events, err
 }
 
+// GetEventsPaginated returns a page of trace events after the given sequence number.
+// Uses limit+1 trick to determine hasMore without an extra COUNT query.
+func (r *Repository) GetEventsPaginated(ctx context.Context, sessionID uuid.UUID, afterSeq, limit int) ([]TraceEvent, bool, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT id, session_id, sequence_num, event_type, received_at, metadata, event_hash
+		FROM trace_events
+		WHERE session_id = $1 AND sequence_num > $2
+		ORDER BY sequence_num ASC
+		LIMIT $3
+	`, sessionID, afterSeq, limit+1)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+
+	var events []TraceEvent
+	for rows.Next() {
+		var e TraceEvent
+		var metaBytes []byte
+		if err := rows.Scan(&e.ID, &e.SessionID, &e.SequenceNum, &e.EventType, &e.ReceivedAt, &metaBytes, &e.EventHash); err != nil {
+			return nil, false, err
+		}
+		if len(metaBytes) > 0 {
+			_ = jsonUnmarshal(metaBytes, &e.Metadata)
+		}
+		events = append(events, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+
+	hasMore := len(events) > limit
+	if hasMore {
+		events = events[:limit]
+	}
+	return events, hasMore, nil
+}
+
 // GetAllEvents returns all trace events for a session ordered by sequence number.
 func (r *Repository) GetAllEvents(ctx context.Context, sessionID uuid.UUID) ([]TraceEvent, error) {
 	rows, err := r.db.Query(ctx, `
@@ -337,6 +398,42 @@ func (r *Repository) GetAllEvents(ctx context.Context, sessionID uuid.UUID) ([]T
 	return events, rows.Err()
 }
 
+// GetActiveSessionsByActivity returns all active exam sessions for an actividad,
+// verifying ownership via the calling docente's ID.
+func (r *Repository) GetActiveSessionsByActivity(ctx context.Context, actividadID, docenteID uuid.UUID) ([]ActiveSessionRow, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT es.id, es.student_id, es.actividad_id, es.submission_id, es.status,
+		       es.started_at, es.closed_at, es.last_heartbeat_at, es.last_event_hash, es.event_count,
+		       u.full_name, u.email
+		FROM exam_sessions es
+		JOIN actividades a ON a.id = es.actividad_id
+		JOIN cursos c ON c.id = a.curso_id
+		JOIN users u ON u.id = es.student_id
+		WHERE es.actividad_id = $1
+		  AND c.docente_id = $2
+		  AND es.status = 'active'
+		ORDER BY es.started_at DESC
+	`, actividadID, docenteID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []ActiveSessionRow
+	for rows.Next() {
+		var row ActiveSessionRow
+		if err := rows.Scan(
+			&row.ID, &row.StudentID, &row.ActividadID, &row.SubmissionID, &row.Status,
+			&row.StartedAt, &row.ClosedAt, &row.LastHeartbeatAt, &row.LastEventHash, &row.EventCount,
+			&row.StudentName, &row.StudentEmail,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
 // ─── Scan helpers ─────────────────────────────────────────────────────────────
 
 func scanSessions(rows pgx.Rows) ([]ExamSession, error) {
@@ -354,6 +451,52 @@ func scanSessions(rows pgx.Rows) ([]ExamSession, error) {
 	return sessions, rows.Err()
 }
 
+// ─── Offline batch insert (M17) ───────────────────────────────────────────────
+
+type offlineBatchEvent struct {
+	Type            string
+	ClientTimestamp time.Time
+	Metadata        map[string]any
+}
+
+// InsertBatch stores offline-buffered trace events with received_offline=true.
+// Events that already exist (same session_id + client_timestamp + event_type where received_offline)
+// are silently skipped. Returns the number of accepted and skipped events.
+func (r *Repository) InsertBatch(ctx context.Context, sessionID uuid.UUID, events []offlineBatchEvent) (accepted, skipped int, err error) {
+	for _, e := range events {
+		metaJSON, _ := jsonMarshal(e.Metadata)
+		tag, execErr := r.db.Exec(ctx, `
+			INSERT INTO trace_events
+				(session_id, sequence_num, event_type, received_at, client_timestamp, received_offline, metadata, event_hash)
+			SELECT
+				$1,
+				COALESCE((SELECT MAX(sequence_num) FROM trace_events WHERE session_id = $1), 0) + 1,
+				$2,
+				NOW(),
+				$3,
+				TRUE,
+				$4,
+				encode(sha256(($1::text || $2 || $3::text)::bytea), 'hex')
+			WHERE NOT EXISTS (
+				SELECT 1 FROM trace_events
+				WHERE session_id = $1
+				  AND event_type = $2
+				  AND client_timestamp = $3
+				  AND received_offline = TRUE
+			)
+		`, sessionID, e.Type, e.ClientTimestamp, metaJSON)
+		if execErr != nil {
+			return accepted, skipped, execErr
+		}
+		if tag.RowsAffected() > 0 {
+			accepted++
+		} else {
+			skipped++
+		}
+	}
+	return accepted, skipped, nil
+}
+
 func scanWorkerJobs(rows pgx.Rows) ([]WorkerJob, error) {
 	var jobs []WorkerJob
 	for rows.Next() {
@@ -361,6 +504,7 @@ func scanWorkerJobs(rows pgx.Rows) ([]WorkerJob, error) {
 		if err := rows.Scan(
 			&j.ID, &j.SessionID, &j.SubmissionID, &j.StreamID, &j.Status,
 			&j.EnqueuedAt, &j.ClaimedAt, &j.DoneAt, &j.AttemptCount, &j.Error,
+			&j.MaxRetries, &j.DeadAt,
 		); err != nil {
 			return nil, err
 		}

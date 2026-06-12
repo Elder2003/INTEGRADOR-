@@ -21,14 +21,18 @@ func NewDetectionRepository(db *pgxpool.Pool) *DetectionRepository {
 	return &DetectionRepository{db: db}
 }
 
-func (r *DetectionRepository) InsertHeuristic(ctx context.Context, sessionID uuid.UUID, score int, flagged []string, eventCount int) (uuid.UUID, error) {
+func (r *DetectionRepository) InsertHeuristic(ctx context.Context, sessionID uuid.UUID, score int, flagged []string, eventCount int, temporalJSON []byte) (uuid.UUID, error) {
 	var id uuid.UUID
+	var temporal interface{}
+	if len(temporalJSON) > 0 {
+		temporal = temporalJSON
+	}
 	err := r.db.QueryRow(ctx, `
 		INSERT INTO analysis_results
-			(session_id, analysis_type, score, flagged_categories, event_count)
-		VALUES ($1, 'heuristic', $2, $3, $4)
+			(session_id, analysis_type, score, flagged_categories, event_count, temporal_metrics)
+		VALUES ($1, 'heuristic', $2, $3, $4, $5)
 		RETURNING id`,
-		sessionID, score, flagged, eventCount,
+		sessionID, score, flagged, eventCount, temporal,
 	).Scan(&id)
 	return id, err
 }
@@ -170,6 +174,26 @@ func (r *DetectionRepository) GetSubmissionStorageKey(ctx context.Context, submi
 		submissionID,
 	).Scan(&storageKey, &originalFilename)
 	return storageKey, originalFilename, err
+}
+
+// GetExamContext returns the student's exam_answer text and the activity instructions.
+func (r *DetectionRepository) GetExamContext(ctx context.Context, submissionID, actividadID uuid.UUID) (examAnswer, instructions string, err error) {
+	var ea *string
+	var ins string
+	err = r.db.QueryRow(ctx, `
+		SELECT s.exam_answer, a.instructions
+		FROM submissions s
+		JOIN actividades a ON a.id = s.actividad_id
+		WHERE s.id = $1`,
+		submissionID,
+	).Scan(&ea, &ins)
+	if err != nil {
+		return "", "", err
+	}
+	if ea != nil {
+		examAnswer = *ea
+	}
+	return examAnswer, ins, nil
 }
 
 func (r *DetectionRepository) GetCurricularScope(ctx context.Context, actividadID uuid.UUID) (carrera, codigoMateria string, semestre int, err error) {

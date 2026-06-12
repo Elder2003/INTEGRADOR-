@@ -3,6 +3,7 @@ package rag
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/Elder2003/nextlab-api/internal/config"
 )
@@ -48,9 +49,16 @@ func (s *RetrieveService) QueryCurricular(ctx context.Context, req CurricularQue
 	limit := s.resolveLimit(req.MaxChunks)
 	vecStr := formatVector(queryVec)
 
-	chunks, err := s.curRepo.QuerySimilar(ctx, req.Carrera, req.Semestre, req.CodigoMateria, vecStr, limit)
+	semanticChunks, err := s.curRepo.QuerySimilar(ctx, req.Carrera, req.Semestre, req.CodigoMateria, vecStr, limit)
 	if err != nil {
 		return nil, fmt.Errorf("similarity query: %w", err)
+	}
+
+	// Hybrid: combine with lexical BM25 results using RRF
+	lexicalChunks, _ := s.curRepo.LexicalSearchCurricular(ctx, req.Carrera, req.Semestre, req.CodigoMateria, req.Query, limit)
+	chunks := reciprocalRankFusion(semanticChunks, lexicalChunks, 60)
+	if len(chunks) > limit {
+		chunks = chunks[:limit]
 	}
 
 	// Union extra interdisciplinary scopes when actividadID is set
@@ -101,15 +109,59 @@ func (s *RetrieveService) QueryDocente(ctx context.Context, req DocenteQueryRequ
 	}
 
 	limit := s.resolveLimit(req.MaxChunks)
-	chunks, err := s.docRepo.QuerySimilar(ctx, req.DocenteID, req.CursoID, req.ActividadID, formatVector(queryVec), limit)
+	semanticChunks, err := s.docRepo.QuerySimilar(ctx, req.DocenteID, req.CursoID, req.ActividadID, formatVector(queryVec), limit)
 	if err != nil {
 		return nil, fmt.Errorf("similarity query: %w", err)
+	}
+
+	// Hybrid: combine with lexical BM25 results using RRF
+	lexicalChunks, _ := s.docRepo.LexicalSearchDocente(ctx, req.DocenteID, req.CursoID, req.Query, limit)
+	chunks := reciprocalRankFusion(semanticChunks, lexicalChunks, 60)
+	if len(chunks) > limit {
+		chunks = chunks[:limit]
 	}
 
 	return &RetrievalResponse{
 		Rubrics: nullSafe(rubrics),
 		Chunks:  nullSafe(chunks),
 	}, nil
+}
+
+// reciprocalRankFusion merges semantic and lexical results using RRF with k=60.
+// Results are deduplicated by DocumentID+ChunkIndex.
+func reciprocalRankFusion(semantic, lexical []ChunkResult, k int) []ChunkResult {
+	type entry struct {
+		chunk ChunkResult
+		score float64
+	}
+	seen := make(map[string]int) // key → index in entries
+	entries := []entry{}
+
+	addRanked := func(chunks []ChunkResult) {
+		for i, ch := range chunks {
+			key := ch.DocumentID.String() + ":" + fmt.Sprintf("%d", ch.ChunkIndex)
+			rrfScore := 1.0 / float64(k+i+1)
+			if idx, ok := seen[key]; ok {
+				entries[idx].score += rrfScore
+			} else {
+				seen[key] = len(entries)
+				entries = append(entries, entry{chunk: ch, score: rrfScore})
+			}
+		}
+	}
+
+	addRanked(semantic)
+	addRanked(lexical)
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].score > entries[j].score
+	})
+
+	results := make([]ChunkResult, len(entries))
+	for i, e := range entries {
+		results[i] = e.chunk
+	}
+	return results
 }
 
 func (s *RetrieveService) resolveLimit(requested int) int {

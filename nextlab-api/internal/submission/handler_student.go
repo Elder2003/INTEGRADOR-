@@ -166,6 +166,38 @@ func DeleteHandler(svc *Service) fiber.Handler {
 	}
 }
 
+// ─── POST /actividades/:aid/submission/exam ──────────────────────────────────
+
+func ExamAnswerHandler(svc *Service) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		sid, err := studentID(c)
+		if err != nil {
+			return submUnauthorized(c)
+		}
+		aid, err := parseAID(c)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+				Error: "invalid_id", Message: "invalid actividad id", CorrelationID: submCorrelationID(c),
+			})
+		}
+
+		var body struct {
+			Answer string `json:"answer"`
+		}
+		if err := c.BodyParser(&body); err != nil || body.Answer == "" {
+			return c.Status(fiber.StatusBadRequest).JSON(ErrorResponse{
+				Error: "missing_answer", Message: "field 'answer' is required", CorrelationID: submCorrelationID(c),
+			})
+		}
+
+		resp, err := svc.SubmitExamAnswer(c.Context(), sid, aid, body.Answer)
+		if err != nil {
+			return mapStudentError(c, err)
+		}
+		return c.Status(fiber.StatusCreated).JSON(resp)
+	}
+}
+
 // ─── GET /actividades/:aid/submission/download ────────────────────────────────
 
 func StudentDownloadHandler(svc *Service) fiber.Handler {

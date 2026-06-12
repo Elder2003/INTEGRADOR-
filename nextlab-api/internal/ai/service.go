@@ -69,6 +69,7 @@ func (s *Service) SeedIfEmpty(ctx context.Context) {
 		slog.Info("ai router: seeded initial mode", "mode", "local")
 	}
 	s.modeCache.Store(&cachedMode{mode: mode, fetchedAt: time.Now()})
+	slog.Info("ai router: cache initialised", "mode", mode)
 }
 
 // StartCacheRefresh starts a background goroutine that refreshes the mode cache every 3 seconds.

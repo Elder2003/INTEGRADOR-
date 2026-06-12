@@ -166,6 +166,16 @@ func (r *Repository) HasOpenAppeal(ctx context.Context, sessionID uuid.UUID) (bo
 	return exists, err
 }
 
+// HasOpenAppealOfType checks if an active appeal of the given type exists for the session.
+func (r *Repository) HasOpenAppealOfType(ctx context.Context, sessionID uuid.UUID, appealType string) (bool, error) {
+	var exists bool
+	err := r.db.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM appeals WHERE session_id=$1 AND type=$2 AND status IN ('pending','escalated'))`,
+		sessionID, appealType,
+	).Scan(&exists)
+	return exists, err
+}
+
 // ListAppeals returns appeals matching filter and the total count.
 func (r *Repository) ListAppeals(ctx context.Context, filter AppealFilter) ([]Appeal, int, error) {
 	where := []string{"1=1"}

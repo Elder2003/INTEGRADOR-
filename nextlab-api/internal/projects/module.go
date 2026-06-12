@@ -17,11 +17,11 @@ type Module struct {
 	repo          *Repository
 }
 
-func NewModule(db *pgxpool.Pool, mc *minio.Client, bucket string, aiSvc *ai.Service, _ *config.Config, alertWriter alerts.AlertWriter) *Module {
+func NewModule(db *pgxpool.Pool, mc *minio.Client, bucket string, aiSvc *ai.Service, cfg *config.Config, alertWriter alerts.AlertWriter) *Module {
 	repo := NewRepository(db)
 	return &Module{
 		investigacion: newInvestigacionService(repo, mc, bucket, alertWriter),
-		gitAnalysis:   newGitAnalysisService(repo, aiSvc),
+		gitAnalysis:   newGitAnalysisService(repo, aiSvc, cfg),
 		defensa:       newDefensaService(repo),
 		repo:          repo,
 	}

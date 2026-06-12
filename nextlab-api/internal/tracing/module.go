@@ -27,15 +27,28 @@ func RegisterRoutes(
 	app.Post("/actividades/:aid/session", append(studentMW, openSessionHandler(svc))...)
 	app.Get("/actividades/:aid/session", append(studentMW, getSessionHandler(svc))...)
 
+	// ─── Student — offline batch delivery (M17) ──────────────────────────────
+	app.Post("/student/sessions/:sid/trace/batch", append(studentMW, batchTraceHandler(svc))...)
+
 	// ─── Student — WebSocket event stream ─────────────────────────────────────
 	// JWT validated via query param before upgrade (research.md Decision 2)
 	app.Use("/sessions/:sid/ws", wsJWTMiddleware(cfg))
 	app.Get("/sessions/:sid/ws", websocket.New(makeWSHandler(hub, svc)))
 
+	// ─── Docente — live observation WebSocket ─────────────────────────────────
+	app.Use("/sessions/:sid/ws/observe", wsJWTMiddleware(cfg))
+	app.Get("/sessions/:sid/ws/observe", websocket.New(makeWSObserveHandler(hub, svc)))
+
 	// ─── Docente & Co-docente — trace review ──────────────────────────────────
 	trace := app.Group("/submissions", authMW, roleGuard("docente", "co_docente"))
 	trace.Get("/:sid/trace", getTraceHandler(svc))
+	trace.Get("/:sid/trace/events", getTracePagedHandler(svc))
 	trace.Get("/:sid/trace/verify", verifyTraceHandler(svc))
+
+	// ─── Docente — live session monitoring (HTTP polling) ─────────────────────
+	docenteMW := []fiber.Handler{authMW, roleGuard("docente")}
+	app.Get("/cursos/:cid/actividades/:aid/sessions/active", append(docenteMW, listActiveSessionsHandler(svc))...)
+	app.Get("/sessions/:sid/events", append(docenteMW, getSessionEventsHandler(svc))...)
 
 	return svc
 }

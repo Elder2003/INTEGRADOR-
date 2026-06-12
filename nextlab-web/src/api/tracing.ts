@@ -26,7 +26,7 @@ function toApiError(err: unknown): never {
 
 export async function createSession(aid: string): Promise<SessionResponse> {
   try {
-    const res = await api.post<SessionResponse>(`/actividades/${aid}/sessions`)
+    const res = await api.post<SessionResponse>(`/actividades/${aid}/session`)
     return res.data
   } catch (err) {
     toApiError(err)
