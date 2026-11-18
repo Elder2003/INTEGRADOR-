@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom'
 import type { Role } from '../types'
 import { useAuth } from '../context/AuthContext'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'

@@ -9,7 +9,7 @@ export function setAccessTokenGetter(fn: () => string | null): void {
 }
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:8081',
 })
 
 api.interceptors.request.use((config) => {

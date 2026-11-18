@@ -82,8 +82,7 @@ export function useTracingSession(aid: string, traceEnabled: boolean): TracingSe
     }
   }, [sendEvent])
 
-  const openWebSocket = useCallback(
-    (sid: string, token: string) => {
+  function openWebSocket(sid: string, token: string) {
       const wsUrl = `${import.meta.env.VITE_API_URL.replace('http', 'ws')}/sessions/${sid}/ws?token=${token}`
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
@@ -124,11 +123,9 @@ export function useTracingSession(aid: string, traceEnabled: boolean): TracingSe
       ws.onerror = () => {
         ws.close()
       }
-    },
-    [attachListeners, removeListeners],
-  )
+  }
 
-  const startSession = useCallback(async () => {
+  async function startSession() {
     if (!traceEnabled || !accessToken) return
     setStatus('starting')
     try {
@@ -140,7 +137,7 @@ export function useTracingSession(aid: string, traceEnabled: boolean): TracingSe
     } catch {
       setStatus('error')
     }
-  }, [aid, traceEnabled, accessToken, openWebSocket])
+  }
 
   const terminateSession = useCallback(async () => {
     removeListeners()

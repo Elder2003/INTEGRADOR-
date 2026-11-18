@@ -33,15 +33,13 @@ export function DetectionReportPage() {
   const sessionId = (location.state as { sessionId?: string } | null)?.sessionId
 
   const [data, setData] = useState<DetectionReport | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [fetchError, setFetchError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(Boolean(sessionId))
+  const [fetchError, setFetchError] = useState<string | null>(
+    sessionId ? null : 'No se encontró el ID de sesión. Navega desde la página de la entrega.',
+  )
 
   useEffect(() => {
-    if (!sessionId) {
-      setFetchError('No se encontró el ID de sesión. Navega desde la página de la entrega.')
-      setLoading(false)
-      return
-    }
+    if (!sessionId) return
     getSessionDetectionReport(sessionId)
       .then(setData)
       .catch((err: Error) => setFetchError(err.message))

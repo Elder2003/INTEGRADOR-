@@ -44,7 +44,7 @@ export function ActividadDetailPage() {
       .then(setActividad)
       .catch(err => setError((err as ApiError).message))
       .finally(() => setLoading(false))
-  }, [aid])
+  }, [cursoId, aid])
 
   async function handleDelete() {
     if (!aid) return

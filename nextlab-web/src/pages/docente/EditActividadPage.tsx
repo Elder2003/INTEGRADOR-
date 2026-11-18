@@ -44,7 +44,7 @@ export function EditActividadPage() {
       })
       .catch(err => setError((err as ApiError).message))
       .finally(() => setLoading(false))
-  }, [aid])
+  }, [cursoId, aid])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()

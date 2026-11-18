@@ -134,7 +134,7 @@ export function CursoDetailPage() {
     if (!deleteActividadId) return
     setDeletingActividad(true)
     try {
-      await deleteActividad(deleteActividadId)
+      await deleteActividad(cursoId!, deleteActividadId)
       setActividades(prev => prev.filter(a => a.id !== deleteActividadId))
     } catch (err) {
       setDeleteActError((err as ApiError).message)

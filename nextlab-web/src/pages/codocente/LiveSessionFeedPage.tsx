@@ -17,7 +17,10 @@ export function CodocenteLiveSessionFeedPage() {
   const [sessionEnded, setSessionEnded] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const eventsRef = useRef<TraceLogEntry[]>([])
-  eventsRef.current = events
+
+  useEffect(() => {
+    eventsRef.current = events
+  }, [events])
 
   useEffect(() => {
     if (!sid) return

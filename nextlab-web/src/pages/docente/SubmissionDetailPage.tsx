@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { downloadSubmission } from '../../api/submissions'
-import type { SubmissionListItem, ActividadTipo, ActividadFlags } from '../../types/academic'
+import type { SubmissionListItem, ActividadTipo } from '../../types/academic'
 import { ErrorMessage } from '../../components/common/ErrorMessage'
 import { useAuth } from '../../context/AuthContext'
 import { GradePanel } from '../../components/docente/GradePanel'
@@ -36,12 +36,11 @@ const APPEAL_STATUS_CLASS: Record<string, string> = {
 export function SubmissionDetailPage() {
   const { cid, aid, sid } = useParams<{ cid: string; aid: string; sid: string }>()
   const location = useLocation()
-  const rawState = location.state as (SubmissionListItem & { actividadTipo?: ActividadTipo; actividadFlags?: ActividadFlags }) | { item: SubmissionListItem; actividadTipo?: ActividadTipo; actividadFlags?: ActividadFlags } | undefined
+  const rawState = location.state as (SubmissionListItem & { actividadTipo?: ActividadTipo }) | { item: SubmissionListItem; actividadTipo?: ActividadTipo } | undefined
   const item: SubmissionListItem | undefined = rawState
     ? ('item' in rawState && rawState.item ? rawState.item : rawState as SubmissionListItem)
     : undefined
   const actividadTipo = rawState && 'actividadTipo' in rawState ? rawState.actividadTipo : undefined
-  const actividadFlags = rawState && 'actividadFlags' in rawState ? rawState.actividadFlags : undefined
   const { user } = useAuth()
 
   const routePrefix = location.pathname.startsWith('/docente') ? '/docente' : '/codocente'

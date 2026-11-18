@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import { login as apiLogin, logout as apiLogout, refreshToken } from '../api/auth'
 import { clearTokens, decodeJWT, getRefreshToken, setTokens } from '../lib/auth'
 import { setAccessTokenGetter } from '../lib/api'
@@ -17,17 +17,15 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [accessToken, setAccessToken] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(() => Boolean(getRefreshToken()))
 
-  const accessTokenRef = useRef<string | null>(null)
-  accessTokenRef.current = accessToken
-
-  setAccessTokenGetter(() => accessTokenRef.current)
+  useEffect(() => {
+    setAccessTokenGetter(() => accessToken)
+  }, [accessToken])
 
   useEffect(() => {
     const rt = getRefreshToken()
     if (!rt) {
-      setIsLoading(false)
       return
     }
     refreshToken(rt)

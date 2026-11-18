@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 
 interface ConfirmModalProps {
   isOpen: boolean
@@ -19,18 +19,14 @@ export function ConfirmModal({
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
-  // Ref keeps the latest onCancel without re-subscribing the effect on every render
-  const onCancelRef = useRef(onCancel)
-  onCancelRef.current = onCancel
-
   useEffect(() => {
     if (!isOpen) return
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onCancelRef.current()
+      if (e.key === 'Escape') onCancel()
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen])
+  }, [isOpen, onCancel])
 
   if (!isOpen) return null
 

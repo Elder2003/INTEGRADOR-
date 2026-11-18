@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { listSubmissions, listConfigChanges } from '../../api/submissions'
-import type { SubmissionListResponse, ConfigChangesResponse } from '../../types/academic'
+import type { SubmissionListResponse } from '../../types/academic'
 import { LoadingSpinner } from '../../components/common/LoadingSpinner'
 import { ErrorMessage } from '../../components/common/ErrorMessage'
 import { SubmissionTable } from '../../components/docente/SubmissionTable'

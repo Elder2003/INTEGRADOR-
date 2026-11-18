@@ -109,7 +109,7 @@ export async function assignDefensaSlot(
 export async function getMyDefensaSlot(aid: string): Promise<DefensaSlot | null> {
   try {
     const res = await api.get<DefensaSlot | null>(`/actividades/${aid}/defensa-slot/me`)
-    return res.data !== null && res.data !== '' ? res.data : null
+    return res.data
   } catch (err) {
     toApiError(err)
   }
