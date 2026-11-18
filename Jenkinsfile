@@ -64,6 +64,10 @@ pipeline {
             set -e
 
             "$GOBIN/go-junit-report" < ../reports/go-unit.log > ../reports/go-unit.xml
+            if [ "$test_status" -ne 0 ]; then
+              echo 'Las pruebas Go fallaron; contenido de reports/go-unit.log:' >&2
+              cat ../reports/go-unit.log >&2
+            fi
             exit "$test_status"
           '''
         }
