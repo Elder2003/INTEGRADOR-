@@ -9,7 +9,6 @@
 *.out
 *.prof
 vendor/
-go.sum
 
 # Build artifacts
 /bin/
