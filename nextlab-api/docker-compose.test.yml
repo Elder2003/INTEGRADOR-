@@ -29,7 +29,10 @@ services:
       - test_redis_data:/data
 
   minio:
-    image: minio/minio:latest
+    # The upstream minio/minio Docker Hub repository is no longer available.
+    # Keep tests reproducible with the pinned, compatible image used by the
+    # development stack as well.
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
