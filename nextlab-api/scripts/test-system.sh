@@ -35,9 +35,15 @@ request() {
 }
 
 status_of() { tail -n 1 <<<"$1"; }
-body_of() { sed '$d' <<<"$1"; }
+body_of() {
+  if (( $# > 0 )); then
+    sed '$d' <<<"$1"
+  else
+    sed '$d'
+  fi
+}
 expect() {
-  local label=$1 expected=$2 result=$3 actual
+  local expected=$1 label=$2 result=$3 actual
   actual=$(status_of "$result")
   if [[ "$actual" == "$expected" ]]; then pass "$label ($actual)"; else fail "$label: esperado $expected, recibido $actual: $(body_of "$result")"; fi
 }
@@ -72,7 +78,7 @@ CODocente_TOKEN=$(token_for codocente@nextlab.dev)
 
 HEALTH=$(request GET /health)
 expect_2xx 'Salud: base de datos, caché, almacenamiento e IA simulada' "$HEALTH"
-expect 'Un estudiante no puede administrar carreras' 403 "$(request GET /admin/carreras "$STUDENT_TOKEN")"
+expect 403 'Un estudiante no puede administrar carreras' "$(request GET /admin/carreras "$STUDENT_TOKEN")"
 expect_2xx 'Autenticación /auth/me (administrador)' "$(request GET /auth/me "$ADMIN_TOKEN")"
 expect_2xx 'Autenticación /auth/me (docente)' "$(request GET /auth/me "$DOCENTE_TOKEN")"
 expect_2xx 'Autenticación /auth/me (estudiante)' "$(request GET /auth/me "$STUDENT_TOKEN")"
@@ -80,7 +86,7 @@ expect_2xx 'Autenticación /auth/me (estudiante)' "$(request GET /auth/me "$STUD
 expect_2xx 'Administración académica: carreras' "$(request GET /admin/carreras "$ADMIN_TOKEN")"
 expect_2xx 'Administración académica: materias' "$(request GET /admin/materias "$ADMIN_TOKEN")"
 expect_2xx 'Administración académica: perfiles de estudiante' "$(request GET /admin/student-profiles "$ADMIN_TOKEN")"
-expect_2xx 'Panel del estudiante: cursos inscritos' "$(request GET /student/me/cursos "$STUDENT_TOKEN")"
+expect_2xx 'Panel del estudiante: cursos inscritos' "$(request GET /me/cursos "$STUDENT_TOKEN")"
 expect_2xx 'Panel docente: cursos' "$(request GET /cursos "$DOCENTE_TOKEN")"
 
 COURSE_ID='44440000-0000-0000-0000-000000000001'
@@ -92,7 +98,7 @@ SESSION=$(request POST "/actividades/$ACTIVITY_ID/session" "$STUDENT_TOKEN")
 expect 201 'Estudiante abre sesión trazable' "$SESSION"
 SESSION_ID=$(body_of "$SESSION" | jq -r '.id')
 NOW_MS=$(( $(date +%s) * 1000 ))
-expect 202 'Trazabilidad: lote offline de eventos' "$(request POST "/student/sessions/$SESSION_ID/trace/batch" "$STUDENT_TOKEN" "{\"events\":[{\"type\":\"focus\",\"client_timestamp\":$NOW_MS,\"metadata\":{\"source\":\"system-test\"}}]}")"
+expect 202 'Trazabilidad: lote offline de eventos' "$(request POST "/student/sessions/$SESSION_ID/trace/batch" "$STUDENT_TOKEN" "{\"events\":[{\"type\":\"tab_focus\",\"client_timestamp\":$NOW_MS,\"metadata\":{\"source\":\"system-test\"}}]}")"
 
 UPLOAD=$(curl -sS -X POST "$BASE_URL/actividades/$ACTIVITY_ID/submission" -H "Authorization: Bearer $STUDENT_TOKEN" -F "file=@$ROOT_DIR/scripts/single-page.pdf" -w $'\n%{http_code}')
 expect 201 'Entrega de archivo a MinIO y encolado para el worker' "$UPLOAD"
@@ -144,7 +150,7 @@ expect 422 'ML: protege reentrenamiento cuando no hay datos etiquetados suficien
 APPEAL=$(request POST /appeals "$STUDENT_TOKEN" "{\"session_id\":\"$SESSION_ID\",\"type\":\"analysis_dispute\",\"reason\":\"Prueba integral de apelación\"}")
 expect 201 'Estudiante registra apelación con cadena de evidencia' "$APPEAL"
 APPEAL_ID=$(body_of "$APPEAL" | jq -r '.id')
-expect_2xx 'Consulta de evidencia de apelación' "$(request GET "/appeals/$APPEAL_ID/evidence" "$STUDENT_TOKEN")"
+expect 403 'Estudiante no puede consultar evidencia reservada para docente o administrador' "$(request GET "/appeals/$APPEAL_ID/evidence" "$STUDENT_TOKEN")"
 expect_2xx 'Administrador lista apelaciones' "$(request GET /appeals "$ADMIN_TOKEN")"
 
 printf '\nResultado: %d correctas, %d fallidas.\n' "$PASS" "$FAIL"

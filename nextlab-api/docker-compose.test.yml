@@ -55,6 +55,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      target: runtime
     environment: &nextlab_test_env
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/nextlab_test?sslmode=disable
       REDIS_ADDR: redis:6379
@@ -105,6 +106,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      target: runtime
     command: ./worker
     environment: *nextlab_test_env
     depends_on:
