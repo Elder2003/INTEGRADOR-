@@ -59,7 +59,7 @@ func (m *Module) RegisterRoutes(
 	// Stage file submission: students only
 	app.Post("/actividades/:actividadId/stages/:stageId/submit",
 		authMiddleware,
-		roleGuard("student"),
+		roleGuard("estudiante"),
 		SubmitToStageHandler(m.investigacion),
 	)
 
@@ -82,7 +82,7 @@ func (m *Module) RegisterRoutes(
 	// Git URL submission: students only
 	app.Post("/actividades/:actividadId/git-submit",
 		authMiddleware,
-		roleGuard("student"),
+		roleGuard("estudiante"),
 		GitSubmitHandler(m.gitAnalysis),
 	)
 

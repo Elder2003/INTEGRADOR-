@@ -76,7 +76,7 @@ func (s *GitAnalysisService) SubmitGitURL(ctx context.Context, studentID, activi
 
 // GetGitReport returns the analysis report for a student's submission; students get 403.
 func (s *GitAnalysisService) GetGitReport(ctx context.Context, callerID uuid.UUID, callerRole string, actividadID, studentID uuid.UUID) (*GitReportResponse, error) {
-	if callerRole == "student" {
+	if callerRole == "estudiante" {
 		return nil, ErrForbidden
 	}
 

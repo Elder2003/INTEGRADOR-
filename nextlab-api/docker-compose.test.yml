@@ -1,0 +1,114 @@
+# Isolated system-test stack. It has its own Compose project name and volumes;
+# it never connects to the development database or an external AI provider.
+name: nextlab-system-test
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nextlab_test
+      POSTGRES_HOST_AUTH_METHOD: trust
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d nextlab_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - test_postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - test_redis_data:/data
+
+  minio:
+    image: minio/minio:latest
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: minio server /data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - test_minio_data:/data
+
+  test-ai:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: test-ai
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment: &nextlab_test_env
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/nextlab_test?sslmode=disable
+      REDIS_ADDR: redis:6379
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: nextlab
+      MINIO_USE_SSL: "false"
+      API_PORT: "8080"
+      LOG_LEVEL: warn
+      APP_ENV: test
+      JWT_SECRET: nextlab-system-test-secret-at-least-32-characters
+      ACCESS_TOKEN_TTL: 15m
+      REFRESH_TOKEN_TTL: 168h
+      GOOGLE_CLIENT_ID: test-client
+      GOOGLE_CLIENT_SECRET: test-secret
+      GOOGLE_REDIRECT_URL: http://localhost:18080/auth/google/callback
+      AI_PRIMARY_URL: http://test-ai:8081
+      AI_PRIMARY_MODEL: nextlab-test-model
+      AI_PRIMARY_TIMEOUT_SECS: "5"
+      AI_CLOUD_URL: http://test-ai:8081
+      AI_CLOUD_API_KEY: test-only
+      AI_EMBED_URL: http://test-ai:8081
+      AI_EMBED_MODEL: nextlab-test-embedding
+      AI_EMBED_DIMENSION: "768"
+      RAG_CHUNK_TOKENS: "512"
+      RAG_CHUNK_OVERLAP: "64"
+      RAG_TOKEN_BUDGET: "2048"
+      AI_RATE_LIMIT_REQUESTS: "100"
+      AI_RATE_LIMIT_WINDOW_SEC: "60"
+      HEURISTIC_TAB_WEIGHT: "5"
+      HEURISTIC_CLIP_WEIGHT: "3"
+      HEURISTIC_GAP_WEIGHT: "2"
+      HEURISTIC_HIGH_THRESHOLD: "60"
+    ports:
+      - "18080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      test-ai:
+        condition: service_started
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ./worker
+    environment: *nextlab_test_env
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  test_postgres_data:
+  test_redis_data:
+  test_minio_data:

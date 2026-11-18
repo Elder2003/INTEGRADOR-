@@ -31,7 +31,7 @@ services:
       - redis_data:/data
 
   minio:
-    image: minio/minio:latest
+    image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
     restart: unless-stopped
     environment:
       MINIO_ROOT_USER: minioadmin
@@ -48,18 +48,19 @@ services:
     volumes:
       - minio_data:/data
 
-  ollama:
-    image: ollama/ollama:latest
+  # Deterministic local AI simulator. It avoids downloading models during a demo.
+  test-ai:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: test-ai
     restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
 
   api:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      target: runtime
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/nextlab?sslmode=disable
@@ -71,21 +72,21 @@ services:
       MINIO_USE_SSL: "false"
       API_PORT: "8080"
       LOG_LEVEL: info
-      APP_ENV: development
+      APP_ENV: demo
       JWT_SECRET: nextlab-dev-secret-key-change-in-production-env
       ACCESS_TOKEN_TTL: 15m
       REFRESH_TOKEN_TTL: 168h
       GOOGLE_CLIENT_ID: dev-google-client-id
       GOOGLE_CLIENT_SECRET: dev-google-client-secret
-      GOOGLE_REDIRECT_URL: http://localhost:8080/auth/google/callback
-      AI_PRIMARY_URL: http://ollama:11434
-      AI_PRIMARY_MODEL: llama-3.1-8b-instant
-      AI_PRIMARY_TIMEOUT_SECS: "30"
-      AI_CLOUD_URL: "https://api.groq.com/openai/v1"
-      AI_CLOUD_API_KEY: "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"
-      AI_EMBED_URL: http://ollama:11434
-      AI_EMBED_MODEL: nomic-embed-text
-      AI_EMBED_DIMENSION: "1536"
+      GOOGLE_REDIRECT_URL: http://localhost:8081/auth/google/callback
+      AI_PRIMARY_URL: http://test-ai:8081
+      AI_PRIMARY_MODEL: nextlab-test-model
+      AI_PRIMARY_TIMEOUT_SECS: "5"
+      AI_CLOUD_URL: http://test-ai:8081
+      AI_CLOUD_API_KEY: demo-only
+      AI_EMBED_URL: http://test-ai:8081
+      AI_EMBED_MODEL: nextlab-test-embedding
+      AI_EMBED_DIMENSION: "768"
       RAG_CHUNK_TOKENS: "512"
       RAG_CHUNK_OVERLAP: "64"
       RAG_TOKEN_BUDGET: "2048"
@@ -94,7 +95,7 @@ services:
       HEURISTIC_GAP_WEIGHT: "2"
       HEURISTIC_HIGH_THRESHOLD: "60"
     ports:
-      - "8080:8080"
+      - "8081:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -102,12 +103,16 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      test-ai:
+        condition: service_started
 
   worker:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      target: runtime
     restart: unless-stopped
+    profiles: ["background"]
     environment:
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/nextlab?sslmode=disable
       REDIS_ADDR: redis:6379
@@ -123,14 +128,14 @@ services:
       GOOGLE_CLIENT_ID: dev-google-client-id
       GOOGLE_CLIENT_SECRET: dev-google-client-secret
       GOOGLE_REDIRECT_URL: http://localhost:8080/auth/google/callback
-      AI_PRIMARY_URL: http://ollama:11434
-      AI_PRIMARY_MODEL: llama-3.1-8b-instant
-      AI_PRIMARY_TIMEOUT_SECS: "30"
-      AI_CLOUD_URL: "https://api.groq.com/openai/v1"
-      AI_CLOUD_API_KEY: "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"
-      AI_EMBED_URL: http://ollama:11434
-      AI_EMBED_MODEL: nomic-embed-text
-      AI_EMBED_DIMENSION: "1536"
+      AI_PRIMARY_URL: http://test-ai:8081
+      AI_PRIMARY_MODEL: nextlab-test-model
+      AI_PRIMARY_TIMEOUT_SECS: "5"
+      AI_CLOUD_URL: http://test-ai:8081
+      AI_CLOUD_API_KEY: demo-only
+      AI_EMBED_URL: http://test-ai:8081
+      AI_EMBED_MODEL: nextlab-test-embedding
+      AI_EMBED_DIMENSION: "768"
       RAG_CHUNK_TOKENS: "512"
       RAG_CHUNK_OVERLAP: "64"
       RAG_TOKEN_BUDGET: "2048"
@@ -142,46 +147,26 @@ services:
       - api
     command: ./worker
 
-  migrate:
-    image: migrate/migrate
-    volumes:
-      - ./migrations:/migrations
-    profiles:
-      - tools
-    command: ["-path=/migrations", "-database=postgres://postgres:postgres@postgres:5432/nextlab?sslmode=disable", "up"]
-
-  minio-init:
-    image: minio/mc:latest
-    depends_on:
-      minio:
-        condition: service_healthy
+  # Inserts presentation accounts and data after the API applies its migrations.
+  demo-seed:
+    image: pgvector/pgvector:pg16
     restart: "no"
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set myminio http://minio:9000 minioadmin minioadmin &&
-      mc encrypt set sse-s3 myminio/nextlab || true
-      "
-
-  db-backup:
-    image: prodrigestivill/postgres-backup-local:16
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_DB: nextlab
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      SCHEDULE: "@daily"
-      BACKUP_KEEP_DAYS: "7"
-      BACKUP_KEEP_WEEKS: "4"
-      BACKUP_KEEP_MONTHS: "2"
+      PGPASSWORD: postgres
     volumes:
-      - ./backups:/backups
+      - ./scripts/seed-test-users.sql:/seed/seed-test-users.sql:ro
+    depends_on:
+      api:
+        condition: service_started
+    command:
+      - /bin/sh
+      - -c
+      - >
+        until psql -h postgres -U postgres -d nextlab -c 'SELECT 1 FROM users LIMIT 1' >/dev/null 2>&1;
+        do sleep 2; done;
+        psql -h postgres -U postgres -d nextlab -f /seed/seed-test-users.sql
 
 volumes:
   postgres_data:
   redis_data:
   minio_data:
-  ollama_data:

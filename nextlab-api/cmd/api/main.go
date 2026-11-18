@@ -198,7 +198,11 @@ func main() {
 	detectionSvc.SetBaselineService(baselineSvc)
 	detectionSvc.SetWebhookTrigger(webhooksSvc)
 	detectionSvc.SetMLRuntime(mlSvc.GetRuntime())
-	healthChecker.SetMLMetaProvider(&mlHealthAdapter{svc: mlSvc})
+	// A trained ML artifact is optional in the lightweight presentation stack.
+	// The routes remain available, but its absence must not make the demo unhealthy.
+	if cfg.AppEnv != "demo" {
+		healthChecker.SetMLMetaProvider(&mlHealthAdapter{svc: mlSvc})
+	}
 	detection.RegisterRoutes(app, detectionSvc, auth.AuthMiddleware(cfg), auth.RoleGuard)
 
 	// Project Management (M10)

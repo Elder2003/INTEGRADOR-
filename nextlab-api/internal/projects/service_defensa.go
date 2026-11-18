@@ -41,7 +41,7 @@ func (s *DefensaService) ScheduleDefense(ctx context.Context, docenteID, activid
 
 // GetDefenseAppointment returns the appointment. Students can only see their own.
 func (s *DefensaService) GetDefenseAppointment(ctx context.Context, callerID uuid.UUID, callerRole string, actividadID, studentID uuid.UUID) (*DefenseAppointment, error) {
-	if callerRole == "student" && callerID != studentID {
+	if callerRole == "estudiante" && callerID != studentID {
 		return nil, ErrForbidden
 	}
 	return s.repo.GetDefenseAppointment(ctx, actividadID, studentID)
