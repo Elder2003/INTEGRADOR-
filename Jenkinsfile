@@ -94,6 +94,8 @@ pipeline {
                 '<testsuite name="nextlab-system" tests="1" failures="1" errors="0">' \
                 "  <testcase classname=\"nextlab.system\" name=\"end-to-end\"><failure message=\"El script test-system.sh terminó con código $test_status. Revise system-test.log.\"/></testcase>" \
                 '</testsuite>' > ../reports/system-test.xml
+              echo 'La prueba integral falló; contenido de reports/system-test.log:' >&2
+              cat ../reports/system-test.log >&2
             fi
             exit "$test_status"
           '''
