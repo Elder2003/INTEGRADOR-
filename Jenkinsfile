@@ -19,6 +19,9 @@ pipeline {
   environment {
     CI = 'true'
     GOBIN = "${WORKSPACE}/.ci-tools/bin"
+    // grpc v1.81.1 is not compatible with the Go 1.27 HTTP/2 API yet.
+    // Keep CI on the version declared in nextlab-api/go.mod.
+    GOTOOLCHAIN = 'go1.26.1'
   }
 
   stages {
