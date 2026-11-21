@@ -1,6 +1,14 @@
 pipeline {
   agent { label 'nextlab-ci' }
 
+  parameters {
+    booleanParam(
+      name: 'RUN_SYSTEM_TESTS',
+      defaultValue: false,
+      description: 'Ejecuta la prueba integral aislada, que requiere Docker Compose.'
+    )
+  }
+
   options {
     skipDefaultCheckout(true)
     disableConcurrentBuilds()
@@ -25,13 +33,24 @@ pipeline {
       steps {
         sh '''#!/usr/bin/env bash
           set -euo pipefail
-          docker version
-          docker compose version
           go version
           node --version
           corepack --version
           curl --version
           jq --version
+        '''
+      }
+    }
+
+    stage('Verificar Docker') {
+      when {
+        expression { params.RUN_SYSTEM_TESTS }
+      }
+      steps {
+        sh '''#!/usr/bin/env bash
+          set -euo pipefail
+          docker version
+          docker compose version
         '''
       }
     }
@@ -75,6 +94,9 @@ pipeline {
     }
 
     stage('Prueba integral aislada') {
+      when {
+        expression { params.RUN_SYSTEM_TESTS }
+      }
       steps {
         dir('nextlab-api') {
           sh '''#!/usr/bin/env bash
